@@ -3,6 +3,21 @@
   "displayName": "Azure DevOps Simplify",
   "description": "An Extension to make working with Azure DevOps in VS Code more efficient",
   "version": "0.0.1",
+  "publisher": "tfenster",
+  "author": {
+    "name": "David Feldhoff",
+    "url": "https://twitter.com/feldhoffdavid"
+  },
+  "contributors": [
+    {
+      "name": "Tobias Fenster",
+      "url": "https://tobiasfenster.io"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tfenster/azdevops-vscode-simplify"
+  },
   "engines": {
     "vscode": "^1.72.0"
   },
@@ -10,14 +25,109 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:azdevops-vscode-simplify.helloWorld"
+    "onCommand:azdevops-vscode-simplify.helloWorld",
+    "onView:workitems"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "azdevops-vscode-simplify.helloWorld",
-        "title": "Hello World"
+        "command": "azdevops-vscode-simplify.refreshEntries",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "azdevops-vscode-simplify.openWorkItem",
+        "title": "Open in browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "azdevops-vscode-simplify.addToCommitMessage",
+        "title": "Add to commit message",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "azdevops-vscode-simplify.createBranch",
+        "title": "Create branch for this",
+        "icon": "$(repo-forked)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "azdevops-vscode-simplify",
+          "title": "Azure DevOps",
+          "icon": "$(azure-devops)"
+        }
+      ]
+    },
+    "views": {
+      "azdevops-vscode-simplify": [
+        {
+          "id": "workitems",
+          "name": "Work items"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "azdevops-vscode-simplify.refreshEntries",
+          "when": "view == workitems",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "azdevops-vscode-simplify.openWorkItem",
+          "when": "view == workitems && viewItem == workitem",
+          "group": "inline"
+        },
+        {
+          "command": "azdevops-vscode-simplify.addToCommitMessage",
+          "when": "view == workitems && viewItem == workitem",
+          "group": "inline"
+        },
+        {
+          "command": "azdevops-vscode-simplify.createBranch",
+          "when": "view == workitems && viewItem == workitem",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "azdevops-vscode-simplify.refreshEntries",
+          "when": "false"
+        },
+        {
+          "command": "azdevops-vscode-simplify.openWorkItem",
+          "when": "false"
+        },
+        {
+          "command": "azdevops-vscode-simplify.addToCommitMessage",
+          "when": "false"
+        },
+        {
+          "command": "azdevops-vscode-simplify.createBranch",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "title": "Azure DevOps Simplify",
+        "properties": {
+          "azdevops-vscode-simplify.hideClosedWorkItems": {
+            "type": "boolean",
+            "default": false,
+            "description": "Hide closed work items"
+          },
+          "azdevops-vscode-simplify.maxNumberOfWorkItems": {
+            "type": "number",
+            "default": 25,
+            "description": "Maximum number of work items to show per query"
+          }
+        }
       }
     ]
   },
@@ -32,7 +142,11 @@
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js"
   },
+  "extensionDependencies": [
+    "ms-vscode.azure-account"
+  ],
   "devDependencies": {
+    "@microsoft/vscode-azext-utils": "^0.3.15",
     "@types/vscode": "^1.72.0",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^9.1.1",
@@ -47,5 +161,10 @@
     "webpack": "^5.74.0",
     "webpack-cli": "^4.10.0",
     "@vscode/test-electron": "^2.1.5"
+  },
+  "dependencies": {
+    "@azure/core-auth": "^1.4.0",
+    "@azure/ms-rest-azure-env": "^2.0.0",
+    "axios": "1.1.0"
   }
 }
