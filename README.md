@@ -26,3 +26,7 @@ This extension contributes the following settings:
 ## Known Issues
 
 No features, no issues...
+
+## Authors
+
+This extenion is co-authored by [David Feldhoff](https://twitter.com/feldhoffdavid) and [Tobias Fenster](https://tobiasfenster.io)

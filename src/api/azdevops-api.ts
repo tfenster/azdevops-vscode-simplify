@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getConnection, hideClosedWorkItems, maxNumberOfWorkItems } from './extension';
+import { getConnection, getGitExtension, hideClosedWorkItems, maxNumberOfWorkItems } from '../extension';
+import { InputBox } from '../types/git';
 
 let bugIcon = new vscode.ThemeIcon("bug");
 let taskIcon = new vscode.ThemeIcon("pass");
@@ -177,7 +178,7 @@ export class WorkItem extends vscode.TreeItem {
     contextValue = 'workitem';
 
     public appendToCheckinMessage(line: string): void {
-        this.withSourceControlInputBox((inputBox: vscode.SourceControlInputBox) => {
+        this.withSourceControlInputBox((inputBox: InputBox) => {
             const previousMessage = inputBox.value;
             if (previousMessage) {
                 inputBox.value = previousMessage + "\n" + line;
@@ -187,21 +188,61 @@ export class WorkItem extends vscode.TreeItem {
         });
     }
 
-    private withSourceControlInputBox(fn: (input: vscode.SourceControlInputBox) => void) {
-        const gitExtension = vscode.extensions.getExtension("vscode.git");
-        if (gitExtension) {
-            const git = gitExtension.exports;
-            if (git) {
-                git.getRepositories()
-                    .then((repos: any[]) => {
-                        if (repos && repos.length > 0) {
-                            const inputBox = repos[0].inputBox;
-                            if (inputBox) {
-                                fn(inputBox);
+    private withSourceControlInputBox(fn: (input: InputBox) => void) {
+        const gitExtensionApi = getGitExtension().getGitApi();
+        const repos = gitExtensionApi.repositories;
+        if (repos && repos.length > 0) {
+            const inputBox = repos[0].inputBox;
+            if (inputBox) {
+                fn(inputBox);
+            }
+        } else {
+            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
+        }
+    }
+
+    public async createBranch() {
+        const gitExtensionApi = getGitExtension().getGitApi();
+        const repos = gitExtensionApi.repositories;
+        if (repos && repos.length > 0) {
+            let newBranch = await vscode.window.showInputBox({
+                prompt: "Please enter the name of the new branch"
+            });
+            if (newBranch) {
+                if (repos[0].state.HEAD?.upstream && repos[0].state.remotes.length > 0 && repos[0].state.remotes[0].fetchUrl) {
+                    // get substring after last slash
+                    let remoteRepoName = repos[0].state.remotes[0].fetchUrl;
+                    remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
+                    let remoteRepo = await getConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
+                    let upstreamRef = repos[0].state.HEAD.upstream;
+                    await repos[0].createBranch(newBranch, true);
+                    await repos[0].push(upstreamRef.remote, newBranch, true);
+                    let wiLink = {
+                        // eslint-disable-next-line @typescript-eslint/naming-convention
+                        "Op": 0,
+                        // eslint-disable-next-line @typescript-eslint/naming-convention
+                        "Path": "/relations/-",
+                        // eslint-disable-next-line @typescript-eslint/naming-convention
+                        "Value": {
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "rel": "ArtifactLink",
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "url": `vstfs:///Git/Ref/${this.parent.parent.id}%2F${remoteRepo.id}%2FGB${newBranch}`,
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "attributes": {
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "name": "Branch"
                             }
                         }
-                    });
+                    };
+                    await getConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
+                    vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
+                } else {
+                    vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
+                }
             }
+        } else {
+            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
         }
     }
 }

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getOrganizations, getProjects, getQueries, getWorkItems, Organization, Project, Query } from '../azdevops-api';
+import { getOrganizations, getProjects, getQueries, getWorkItems, Organization, Project, Query } from '../api/azdevops-api';
 
 export class AzDevOpsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
 

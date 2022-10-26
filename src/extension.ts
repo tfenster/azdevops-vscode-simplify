@@ -1,13 +1,15 @@
 import * as vscode from 'vscode';
-import { WorkItem } from './azdevops-api';
-import { Connection } from './connection';
+import { WorkItem } from './api/azdevops-api';
+import { AzDevOpsConnection } from './connection';
+import { GitExtension } from './api/git-api';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
 
-let connection = new Connection();
+let azDevOpsConnection = new AzDevOpsConnection();
+let gitExtension = new GitExtension();
 
 export async function activate(context: vscode.ExtensionContext) {
 
-	const azureAccountExtensionApi = connection.getAzureAccountExtensionApi();
+	const azureAccountExtensionApi = azDevOpsConnection.getAzureAccountExtensionApi();
 	if (!(await azureAccountExtensionApi.waitForLogin())) {
 		return vscode.commands.executeCommand('azure-account.askForLogin');
 	}
@@ -22,10 +24,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', (wi: WorkItem) => {
 		wi.appendToCheckinMessage(`#${wi.wiId}`);
 	}));
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItem) => {
+		wi.createBranch();
+	}));
 }
 
-export function getConnection(): Connection {
-	return connection;
+export function getConnection(): AzDevOpsConnection {
+	return azDevOpsConnection;
+}
+
+export function getGitExtension(): GitExtension {
+	return gitExtension;
 }
 
 // this method is called when your extension is deactivated
