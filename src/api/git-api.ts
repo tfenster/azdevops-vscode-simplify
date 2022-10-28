@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { API } from '../types/git';
+import { API, InputBox, Repository } from '../types/git';
 
 export class GitExtension {
     private static gitApi: API;
@@ -18,4 +18,37 @@ export class GitExtension {
     public getGitApi(): API {
         return GitExtension.gitApi;
     }
+
+    public async appendToCheckinMessage(line: string): Promise<void> {
+        await this.withSourceControlInputBox((inputBox: InputBox) => {
+            const previousMessage = inputBox.value;
+            if (previousMessage) {
+                inputBox.value = previousMessage + "\n" + line;
+            } else {
+                inputBox.value = line;
+            }
+        });
+    }
+
+    private async withSourceControlInputBox(fn: (input: InputBox) => void) {
+        const repo = this.getRepo();
+        if (repo) {
+            const inputBox = repo.inputBox;
+            if (inputBox) {
+                fn(inputBox);
+            }
+        }
+    }
+
+
+    public getRepo(): Repository | undefined {
+        const repos = GitExtension.gitApi.repositories;
+        if (repos && repos.length > 0) {
+            return repos[0];
+        } else {
+            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
+        }
+        return undefined;
+    }
+
 }

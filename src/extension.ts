@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WorkItem } from './api/azdevops-api';
+import { getAllWorkItemsAsQuickpicks, WorkItem } from './api/azdevops-api';
 import { AzDevOpsConnection } from './connection';
 import { GitExtension } from './api/git-api';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
@@ -21,8 +21,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.openWorkItem', (wi: WorkItem) => {
 		vscode.env.openExternal(vscode.Uri.parse(wi.url));
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', (wi: WorkItem) => {
-		wi.appendToCheckinMessage(`#${wi.wiId}`);
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', async (wi: WorkItem) => {
+		gitExtension.appendToCheckinMessage(`#${wi.wiId}`);
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.selectWorkItem', async (wi: WorkItem) => {
+		await selectWorkItem();
 	}));
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItem) => {
 		wi.createBranch();
@@ -50,4 +53,18 @@ export function maxNumberOfWorkItems(): Number {
 	let def: Number | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('maxNumberOfWorkItems');
 	if (def === undefined) { def = 25; }
 	return def;
+}
+
+async function selectWorkItem() {
+	const workItems = await getAllWorkItemsAsQuickpicks();
+	if (workItems && workItems.length > 0) {
+		const workItem = await vscode.window.showQuickPick(workItems, {
+			title: 'Search for the title or ID of the work item you want to add to the commit message',
+			ignoreFocusOut: true,
+			matchOnDescription: true
+		});
+		if (workItem) {
+			gitExtension.appendToCheckinMessage(workItem.description!);
+		}
+	}
 }

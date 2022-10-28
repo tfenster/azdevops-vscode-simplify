@@ -25,7 +25,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:azdevops-vscode-simplify.helloWorld",
+    "onCommand:azdevops-vscode-simplify.selectWorkItem",
     "onView:workitems"
   ],
   "main": "./dist/extension.js",
@@ -45,6 +45,10 @@
         "command": "azdevops-vscode-simplify.addToCommitMessage",
         "title": "Add to commit message",
         "icon": "$(git-commit)"
+      },
+      {
+        "command": "azdevops-vscode-simplify.selectWorkItem",
+        "title": "AzDevOps Simplify: Add work item to commit message"
       },
       {
         "command": "azdevops-vscode-simplify.createBranch",
@@ -110,6 +114,10 @@
         {
           "command": "azdevops-vscode-simplify.createBranch",
           "when": "false"
+        },
+        {
+          "command": "azdevops-vscode-simplify.selectWorkItem",
+          "when": "true"
         }
       ]
     },

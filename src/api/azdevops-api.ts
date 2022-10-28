@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { getConnection, getGitExtension, hideClosedWorkItems, maxNumberOfWorkItems } from '../extension';
-import { InputBox } from '../types/git';
 
 let bugIcon = new vscode.ThemeIcon("bug");
 let taskIcon = new vscode.ThemeIcon("pass");
@@ -43,10 +42,56 @@ export async function getProjects(organization: Organization): Promise<Project[]
     }
 }
 
+export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickItem[] | undefined> {
+    const repo = getGitExtension().getRepo();
+    if (repo) {
+        if (repo.state.remotes[0].fetchUrl) {
+            let remoteRepoName = repo.state.remotes[0].fetchUrl;
+            let pathSegments: string[] | undefined;
+            if (remoteRepoName.startsWith("git@")) {
+                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
+                pathSegments = remoteRepoName.split("/");
+            }
+            else if (remoteRepoName.startsWith('https://')) {
+                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
+                pathSegments = remoteRepoName.split("/");
+            }
+            if (pathSegments && pathSegments.length > 1) {
+                let orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
+                let projectUrl = `${orgUrl}/${pathSegments[1]}`;
+                const query = "Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND ([System.WorkItemType] = 'User Story' OR [System.WorkItemType] = 'Bug' OR [System.WorkItemType] = 'Task') ORDER BY [System.ChangedDate] DESC";
+                let responseWIDetails = await loadWorkItems(query, orgUrl, projectUrl, false);
+                let wiDetails: vscode.QuickPickItem[] = responseWIDetails.value.map((wi: any) => {
+                    let themeIcon = getIconForWorkItemType(wi.fields["System.WorkItemType"]);
+                    return { label: `$(${themeIcon.id}) ${wi.fields["System.Title"]}`, description: `${wi.id}`, detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}` };
+                });
+                return wiDetails;
+            } else {
+                vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`);
+            }
+        } else {
+            vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
+        }
+    }
+}
+
 export async function getWorkItems(query: Query): Promise<WorkItem[]> {
+    let responseWIDetails = await loadWorkItems(query.query, query.parent.parent.url, query.parent.url, true);
+    let wiDetails = new Array<WorkItem>();
+    await responseWIDetails.value.forEach((wi: any) => {
+        let themeIcon = getIconForWorkItemType(wi.fields["System.WorkItemType"]);
+        wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
+    });
+    wiDetails.sort((a, b) => a.label.localeCompare(b.label));
+    return wiDetails;
+}
+
+async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<any> {
     try {
         let connection = getConnection();
-        let responseWIIds = await connection.post(`${query.parent.url}/_apis/wit/wiql?api-version=6.0&$top=${maxNumberOfWorkItems()}`, { "query": query.query });
+        let maxNumberOfWorkItemsParam = "";
+        if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
+        let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
         let wiIds = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
 
         if (wiIds?.length > 0) {
@@ -54,19 +99,7 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
                 "fields": ["System.Id", "System.Title", "System.State", "System.WorkItemType", "System.AssignedTo"],
                 "ids": wiIds
             };
-            let responseWIDetails = await connection.post(`${query.parent.parent.url}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
-            let wiDetails = new Array<WorkItem>();
-            await responseWIDetails.value.forEach((wi: any) => {
-                let themeIcon = bugIcon;
-                if (wi.fields["System.WorkItemType"] === "Task") {
-                    themeIcon = taskIcon;
-                } else if (wi.fields["System.WorkItemType"] === "User Story") {
-                    themeIcon = userStoryIcon;
-                }
-                wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
-            });
-            wiDetails.sort((a, b) => a.label.localeCompare(b.label));
-            return wiDetails;
+            return await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
         }
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
@@ -74,6 +107,16 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
     }
     return [];
 }
+
+function getIconForWorkItemType(workItemType: string): vscode.ThemeIcon {
+    let themeIcon = bugIcon;
+    if (workItemType === "Task") {
+        themeIcon = taskIcon;
+    } else if (workItemType === "User Story") {
+        themeIcon = userStoryIcon;
+    }
+    return themeIcon;
+}   
 
 export async function getQueries(project: Project): Promise<Query[]> {
     let closedFilter = "";
@@ -90,7 +133,6 @@ export async function getQueries(project: Project): Promise<Query[]> {
         new Query("Recently mentioned", "5", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentMentions) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
     ];
 }
-
 
 export class Organization extends vscode.TreeItem {
 
@@ -177,46 +219,21 @@ export class WorkItem extends vscode.TreeItem {
 
     contextValue = 'workitem';
 
-    public appendToCheckinMessage(line: string): void {
-        this.withSourceControlInputBox((inputBox: InputBox) => {
-            const previousMessage = inputBox.value;
-            if (previousMessage) {
-                inputBox.value = previousMessage + "\n" + line;
-            } else {
-                inputBox.value = line;
-            }
-        });
-    }
-
-    private withSourceControlInputBox(fn: (input: InputBox) => void) {
-        const gitExtensionApi = getGitExtension().getGitApi();
-        const repos = gitExtensionApi.repositories;
-        if (repos && repos.length > 0) {
-            const inputBox = repos[0].inputBox;
-            if (inputBox) {
-                fn(inputBox);
-            }
-        } else {
-            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
-        }
-    }
-
     public async createBranch() {
-        const gitExtensionApi = getGitExtension().getGitApi();
-        const repos = gitExtensionApi.repositories;
-        if (repos && repos.length > 0) {
+        const repo = getGitExtension().getRepo();
+        if (repo) {
             let newBranch = await vscode.window.showInputBox({
                 prompt: "Please enter the name of the new branch"
             });
             if (newBranch) {
-                if (repos[0].state.HEAD?.upstream && repos[0].state.remotes.length > 0 && repos[0].state.remotes[0].fetchUrl) {
+                if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
                     // get substring after last slash
-                    let remoteRepoName = repos[0].state.remotes[0].fetchUrl;
+                    let remoteRepoName = repo.state.remotes[0].fetchUrl;
                     remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
                     let remoteRepo = await getConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
-                    let upstreamRef = repos[0].state.HEAD.upstream;
-                    await repos[0].createBranch(newBranch, true);
-                    await repos[0].push(upstreamRef.remote, newBranch, true);
+                    let upstreamRef = repo.state.HEAD.upstream;
+                    await repo.createBranch(newBranch, true);
+                    await repo.push(upstreamRef.remote, newBranch, true);
                     let wiLink = {
                         // eslint-disable-next-line @typescript-eslint/naming-convention
                         "Op": 0,
@@ -241,8 +258,6 @@ export class WorkItem extends vscode.TreeItem {
                     vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
                 }
             }
-        } else {
-            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
         }
     }
 }
