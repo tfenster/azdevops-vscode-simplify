@@ -125,10 +125,14 @@
       {
         "title": "Azure DevOps Simplify",
         "properties": {
-          "azdevops-vscode-simplify.hideClosedWorkItems": {
-            "type": "boolean",
-            "default": false,
-            "description": "Hide closed work items"
+          "azdevops-vscode-simplify.hideWorkItemsWithState": {
+            "type": "array",
+            "default": [
+              "Closed",
+              "Removed"
+            ],
+            "uniqueItems": true,
+            "description": "Hide work items with one of the following states"
           },
           "azdevops-vscode-simplify.maxNumberOfWorkItems": {
             "type": "number",

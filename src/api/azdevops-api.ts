@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { getConnection, getGitExtension, hideClosedWorkItems, maxNumberOfWorkItems } from '../extension';
+import { getConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems } from '../extension';
 
 let bugIcon = new vscode.ThemeIcon("bug");
 let taskIcon = new vscode.ThemeIcon("pass");
@@ -138,12 +138,12 @@ function getIconForWorkItemType(workItemType: string): vscode.ThemeIcon {
         themeIcon = userStoryIcon;
     }
     return themeIcon;
-}   
+}
 
 export async function getQueries(project: Project): Promise<Query[]> {
     let closedFilter = "";
-    if (hideClosedWorkItems()) {
-        closedFilter = " AND [System.State] <> 'Closed' ";
+    for (const closedState of hideWorkItemsWithState()) {
+        closedFilter += ` AND [System.State] <> '${closedState}' `;
     }
     let defaultFilter = "[System.TeamProject] = @project AND ([System.WorkItemType] = 'User Story' OR [System.WorkItemType] = 'Bug' OR [System.WorkItemType] = 'Task')";
     let orderBy = "ORDER BY [System.ChangedDate] DESC";

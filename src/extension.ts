@@ -43,9 +43,9 @@ export function getGitExtension(): GitExtension {
 // this method is called when your extension is deactivated
 export function deactivate() { }
 
-export function hideClosedWorkItems(): boolean {
-	let def: boolean | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('hideClosedWorkItems');
-	if (def === undefined) { def = false; }
+export function hideWorkItemsWithState(): string[] {
+	let def: string[] | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('hideWorkItemsWithState');
+	if (def === undefined) { def = []; }
 	return def;
 }
 
