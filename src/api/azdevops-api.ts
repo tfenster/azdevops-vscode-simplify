@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AzDevOpsConnection } from '../connection';
 import { getConnection, getGitExtension, hideClosedWorkItems, maxNumberOfWorkItems } from '../extension';
 
 let bugIcon = new vscode.ThemeIcon("bug");
@@ -96,20 +97,37 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
         let maxNumberOfWorkItemsParam = "";
         if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
         let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
-        let wiIds = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
+        let wiIds: number[] = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
 
         if (wiIds?.length > 0) {
-            let bodyWIDetails = {
-                "fields": ["System.Id", "System.Title", "System.State", "System.WorkItemType", "System.AssignedTo"],
-                "ids": wiIds
-            };
-            return await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
+            let workItemPromises: Promise<any[]>[] = []
+            let skip = 0;
+            let top = 200;
+            do {
+                workItemPromises.push(loadWorkItemPart(wiIds.slice(skip, skip + top), connection, orgUrl));
+                skip += 200;
+            } while (skip < wiIds.length);
+            const resolvedWorkItemBlocks = await Promise.all<any[]>(workItemPromises);
+            let workItems: any[] = []
+            for (const resolvedWorkItemBlock of resolvedWorkItemBlocks)
+                workItems = workItems.concat(resolvedWorkItemBlock)
+
+            return { count: workItems.length, value: workItems };
         }
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
         console.error(error);
     }
     return [];
+
+    async function loadWorkItemPart(wiIds: number[], connection: AzDevOpsConnection, orgUrl: string): Promise<any[]> {
+        let bodyWIDetails = {
+            "fields": ["System.Id", "System.Title", "System.State", "System.WorkItemType", "System.AssignedTo"],
+            "ids": wiIds
+        };
+        let workItemsPart: { count: number; value: any[]; } = await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
+        return workItemsPart.value;
+    }
 }
 
 function getIconForWorkItemType(workItemType: string): vscode.ThemeIcon {
