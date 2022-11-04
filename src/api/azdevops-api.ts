@@ -87,7 +87,20 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
         let themeIcon = getIconForWorkItemType(wi.fields["System.WorkItemType"]);
         wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
     });
-    wiDetails.sort((a, b) => a.label.localeCompare(b.label));
+    wiDetails.sort((a, b) => {
+        const orderOfStates = ['New', 'Active', 'Resolved', 'Closed', 'Removed']
+        const indexOfA = orderOfStates.indexOf(a.state);
+        const indexOfB = orderOfStates.indexOf(b.state);
+        if (indexOfA != -1 && indexOfB == -1)
+            return -1
+        else if (indexOfA == -1 && indexOfB != -1)
+            return 1;
+        else if (indexOfA != -1 && indexOfB != -1 && indexOfA != indexOfB)
+            return indexOfA - indexOfB;
+        else if (indexOfA == -1 && indexOfB == -1 && indexOfA != indexOfB)
+            return a.state.localeCompare(b.state);
+        return a.label.localeCompare(b.label)
+    });
     return wiDetails;
 }
 

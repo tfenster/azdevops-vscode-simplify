@@ -24,7 +24,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', async (wi: WorkItem) => {
 		gitExtension.appendToCheckinMessage(`#${wi.wiId}`);
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.selectWorkItem', async (wi: WorkItem) => {
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.selectWorkItem', async () => {
 		await selectWorkItem();
 	}));
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItem) => {
