@@ -64,7 +64,7 @@ async function selectWorkItem() {
 			matchOnDescription: true
 		});
 		if (workItem) {
-			gitExtension.appendToCheckinMessage(workItem.description!);
+			gitExtension.appendToCheckinMessage(`#${workItem.description!}`);
 		}
 	}
 }

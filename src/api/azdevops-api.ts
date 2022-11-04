@@ -63,7 +63,11 @@ export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickIte
                 let responseWIDetails = await loadWorkItems(query, orgUrl, projectUrl, false);
                 let wiDetails: vscode.QuickPickItem[] = responseWIDetails.value.map((wi: any) => {
                     let themeIcon = getIconForWorkItemType(wi.fields["System.WorkItemType"]);
-                    return { label: `$(${themeIcon.id}) ${wi.fields["System.Title"]}`, description: `${wi.id}`, detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}` };
+                    return {
+                        label: `$(${themeIcon.id}) ${wi.fields["System.Title"]}`,
+                        description: `${wi.id}`, 
+                        detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}`
+                    };
                 });
                 return wiDetails;
             } else {
