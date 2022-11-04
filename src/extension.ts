@@ -11,7 +11,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const azureAccountExtensionApi = azDevOpsConnection.getAzureAccountExtensionApi();
 	if (!(await azureAccountExtensionApi.waitForLogin())) {
-		return vscode.commands.executeCommand('azure-account.askForLogin');
+		await vscode.commands.executeCommand('azure-account.askForLogin');
 	}
 
 	const azDevOpsProvider = new AzDevOpsProvider();
