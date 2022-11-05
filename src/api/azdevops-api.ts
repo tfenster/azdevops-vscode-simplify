@@ -112,6 +112,7 @@ async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtml
     const workItemTypes = await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId)
 
     const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = []
+    relevantWorkItemTypes.push({ name: "Bug", devOpsIcon: workItemTypes.find(entry => entry.name == "Bug")!.devOpsIcon })
     const connection = getConnection();
     for (const workItemType of workItemTypes) {
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
