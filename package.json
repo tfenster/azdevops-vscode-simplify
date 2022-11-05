@@ -134,6 +134,18 @@
             "uniqueItems": true,
             "description": "Hide work items with one of the following states"
           },
+          "azdevops-vscode-simplify.sortOrderOfWorkItemState": {
+            "type": "array",
+            "default": [
+              "Active",
+              "New",
+              "Resolved",
+              "Closed",
+              "Removed"
+            ],
+            "uniqueItems": true,
+            "description": "Work items are sorted by state, then by name. With this setting you're able to change the order of the states or add your own custom ones."
+          },
           "azdevops-vscode-simplify.maxNumberOfWorkItems": {
             "type": "number",
             "default": 25,

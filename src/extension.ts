@@ -48,6 +48,11 @@ export function hideWorkItemsWithState(): string[] {
 	if (def === undefined) { def = []; }
 	return def;
 }
+export function sortOrderOfWorkItemState(): string[] {
+	let def: string[] | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('sortOrderOfWorkItemState');
+	if (def === undefined) { def = []; }
+	return def;
+}
 
 export function maxNumberOfWorkItems(): Number {
 	let def: Number | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('maxNumberOfWorkItems');

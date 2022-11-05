@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { getConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems } from '../extension';
+import { getConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, sortOrderOfWorkItemState } from '../extension';
 
 let bugIcon = new vscode.ThemeIcon("bug");
 let taskIcon = new vscode.ThemeIcon("pass");
@@ -87,20 +87,6 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
         let themeIcon = getIconForWorkItemType(wi.fields["System.WorkItemType"]);
         wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
     });
-    wiDetails.sort((a, b) => {
-        const orderOfStates = ['New', 'Active', 'Resolved', 'Closed', 'Removed']
-        const indexOfA = orderOfStates.indexOf(a.state);
-        const indexOfB = orderOfStates.indexOf(b.state);
-        if (indexOfA != -1 && indexOfB == -1)
-            return -1
-        else if (indexOfA == -1 && indexOfB != -1)
-            return 1;
-        else if (indexOfA != -1 && indexOfB != -1 && indexOfA != indexOfB)
-            return indexOfA - indexOfB;
-        else if (indexOfA == -1 && indexOfB == -1 && indexOfA != indexOfB)
-            return a.state.localeCompare(b.state);
-        return a.label.localeCompare(b.label)
-    });
     return wiDetails;
 }
 
@@ -124,14 +110,14 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
             let workItems: any[] = []
             for (const resolvedWorkItemBlock of resolvedWorkItemBlocks)
                 workItems = workItems.concat(resolvedWorkItemBlock)
-
+            workItems.sort(sortWorkItems);
             return { count: workItems.length, value: workItems };
         }
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
         console.error(error);
     }
-    return [];
+    return { count: 0, value: [] };
 
     async function loadWorkItemPart(wiIds: number[], connection: AzDevOpsConnection, orgUrl: string): Promise<any[]> {
         let bodyWIDetails = {
@@ -143,14 +129,19 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
     }
 }
 
-function getIconForWorkItemType(workItemType: string): vscode.ThemeIcon {
-    let themeIcon = bugIcon;
-    if (workItemType === "Task") {
-        themeIcon = taskIcon;
-    } else if (workItemType === "User Story") {
-        themeIcon = userStoryIcon;
-    }
-    return themeIcon;
+function sortWorkItems(a: any, b: any): number {
+    const orderOfStates = sortOrderOfWorkItemState();
+    const indexOfA = orderOfStates.indexOf(a.fields["System.State"]);
+    const indexOfB = orderOfStates.indexOf(b.fields["System.State"]);
+    if (indexOfA != -1 && indexOfB == -1)
+        return -1;
+    else if (indexOfA == -1 && indexOfB != -1)
+        return 1;
+    else if (indexOfA != -1 && indexOfB != -1 && indexOfA != indexOfB)
+        return indexOfA - indexOfB;
+    else if (indexOfA == -1 && indexOfB == -1 && indexOfA != indexOfB)
+        return a.fields["System.State"].localeCompare(b.fields["System.State"]);
+    return a.fields["System.Title"].localeCompare(b.fields["System.Title"]);
 }
 
 export async function getQueries(project: Project): Promise<Query[]> {
