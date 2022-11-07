@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, sortOrderOfWorkItemState } from '../helpers';
+import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState } from '../helpers';
 
 export async function getOrganizations(): Promise<Organization[]> {
     try {
@@ -92,8 +92,7 @@ async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string):
     const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1&tabs=HTTP
     const workItemTypes = await connection.get(`${orgUrl}/_apis/work/processes/${processTypeId}/workitemtypes?api-version=7.1-preview.2`);
-    if (workItemTypes && workItemTypes.value)
-    {
+    if (workItemTypes && workItemTypes.value) {
         return workItemTypes.value.map((workItemType: any) => {
             return {
                 name: workItemType.name,
@@ -104,23 +103,64 @@ async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string):
     }
     return [];
 }
+interface IWorkItemType { name: string; devOpsIcon: string; referenceName: string };
 async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ name: string; devOpsIcon: string }[]> {
-    const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(orgUrl, projectNameHtmlEncoded);
-    if (!devOpsProcess) { return []; }
-    const workItemTypes = await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId);
+    try {
+        const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(orgUrl, projectNameHtmlEncoded);
+        if (!devOpsProcess) { return []; }
+        const workItemTypes: IWorkItemType[] = await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId);
 
-    const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = [];
-    relevantWorkItemTypes.push({ name: "Bug", devOpsIcon: workItemTypes.find(entry => entry.name === "Bug")!.devOpsIcon });
-    const connection = getAzureDevOpsConnection();
-    for (const workItemType of workItemTypes) {
-        // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
-        const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcess.typeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
-        if (workItemTypeBehaviors && workItemTypeBehaviors.value) {
-            if (workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id)))
-            { relevantWorkItemTypes.push({ name: workItemType.name, devOpsIcon: workItemType.devOpsIcon }); };
+        const settingShowWorkItemTypes: string[] = showWorkItemTypes();
+        if (settingShowWorkItemTypes.length > 0) {
+            return getRelevantWorkItemsBasedOnSettings(workItemTypes, settingShowWorkItemTypes);
+        } else {
+            return await getRelevantWorkItemsBasedOnDevOps(workItemTypes, devOpsProcess.typeId);
         }
+    } catch {
+        return [
+            { name: 'User Story', devOpsIcon: 'icon_book' },
+            { name: 'Bug', devOpsIcon: 'icon_insect' },
+            { name: 'Task', devOpsIcon: 'icon_clipboard' }
+        ]
     }
-    return relevantWorkItemTypes;
+
+    function getRelevantWorkItemsBasedOnSettings(workItemTypes: IWorkItemType[], settingShowWorkItemTypes: string[]) {
+        const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = [];
+        for (const settingShowWorkItemType of settingShowWorkItemTypes) {
+            const workItemType: IWorkItemType | undefined = workItemTypes.find(entry => entry.name === settingShowWorkItemType);
+            if (workItemType) { relevantWorkItemTypes.push(workItemType); }
+        }
+        return relevantWorkItemTypes;
+    }
+    async function getRelevantWorkItemsBasedOnDevOps(workItemTypes: IWorkItemType[], devOpsProcessTypeId: string) {
+        const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = [];
+        const bugWorkItemType: IWorkItemType | undefined = workItemTypes.find(entry => entry.name === "Bug")
+        if (bugWorkItemType) {
+            relevantWorkItemTypes.push(bugWorkItemType);
+        }
+
+        const connection = getAzureDevOpsConnection();
+        const checkWorkItemPromises: Promise<{ workItemType: IWorkItemType; isRelevant: boolean; }>[] = [];
+        for (const workItemType of workItemTypes) {
+            checkWorkItemPromises.push(checkIsRelevantWorkItemTypeOfProject(connection, orgUrl, devOpsProcessTypeId, workItemType));
+        }
+        const checkedworkItems = await Promise.all(checkWorkItemPromises);
+        for (const checkedWorkItem of checkedworkItems) {
+            if (checkedWorkItem.isRelevant) {
+                relevantWorkItemTypes.push(checkedWorkItem.workItemType);
+            }
+        }
+        return relevantWorkItemTypes;
+    }
+}
+async function checkIsRelevantWorkItemTypeOfProject(connection: AzDevOpsConnection, orgUrl: string, devOpsProcessTypeId: string, workItemType: IWorkItemType): Promise<{ workItemType: IWorkItemType, isRelevant: boolean }> {
+    let isRelevant = false;
+    // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
+    const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcessTypeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
+    if (workItemTypeBehaviors && workItemTypeBehaviors.value) {
+        isRelevant = workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
+    }
+    return { workItemType, isRelevant }
 }
 async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ typeId: string; } | undefined> {
     const connection = getAzureDevOpsConnection();
@@ -128,8 +168,7 @@ async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded:
     const devOpsProcesses = await connection.get(`${orgUrl}/_apis/work/processes?$expand=projects&api-version=7.1-preview.2`);
     if (devOpsProcesses && devOpsProcesses.value) {
         const devOpsProcess: { typeId: string; } | undefined = devOpsProcesses.value.find((process: { typeId: string; projects: { name: string; }[] | undefined; }) => {
-            if (process.projects)
-            { return process.projects.find((project: { name: string; }) => project.name === decodeURI(projectNameHtmlEncoded)); }
+            if (process.projects) { return process.projects.find((project: { name: string; }) => project.name === decodeURI(projectNameHtmlEncoded)); }
         });
         return devOpsProcess;
     }
@@ -167,8 +206,7 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
             } while (skip < wiIds.length);
             const resolvedWorkItemBlocks = await Promise.all<any[]>(workItemPromises);
             let workItems: any[] = [];
-            for (const resolvedWorkItemBlock of resolvedWorkItemBlocks)
-            { workItems = workItems.concat(resolvedWorkItemBlock); };
+            for (const resolvedWorkItemBlock of resolvedWorkItemBlocks) { workItems = workItems.concat(resolvedWorkItemBlock); };
             workItems.sort(sortWorkItems);
             return { count: workItems.length, value: workItems };
         }

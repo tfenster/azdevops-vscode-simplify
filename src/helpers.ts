@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { AzDevOpsConnection } from './connection';
 import { GitExtension } from './api/git-api';
+import { AzDevOpsConnection } from './connection';
 
 let azDevOpsConnection = new AzDevOpsConnection();
 let gitExtension = new GitExtension();
@@ -11,6 +11,10 @@ export function getAzureDevOpsConnection(): AzDevOpsConnection {
 
 export function getGitExtension(): GitExtension {
     return gitExtension;
+}
+
+export function showWorkItemTypes(): string[] {
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showWorkItemTypes', [])
 }
 
 export function hideWorkItemsWithState(): string[] {
