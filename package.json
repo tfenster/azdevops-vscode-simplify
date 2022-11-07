@@ -24,6 +24,7 @@
   "categories": [
     "Other"
   ],
+  "icon": "icon.png",
   "activationEvents": [
     "onCommand:azdevops-vscode-simplify.selectWorkItem",
     "onView:workitems"
@@ -125,10 +126,39 @@
       {
         "title": "Azure DevOps Simplify",
         "properties": {
-          "azdevops-vscode-simplify.hideClosedWorkItems": {
-            "type": "boolean",
-            "default": false,
-            "description": "Hide closed work items"
+          "azdevops-vscode-simplify.showWorkItemTypes": {
+            "type": "array",
+            "default": [],
+            "examples": [
+              [
+                "User Story",
+                "Bug",
+                "Task"
+              ]
+            ],
+            "uniqueItems": true,
+            "description": "Show all work items with one of the following types. If it's empty, we're trying to figure out the relevant work items on our own."
+          },
+          "azdevops-vscode-simplify.hideWorkItemsWithState": {
+            "type": "array",
+            "default": [
+              "Closed",
+              "Removed"
+            ],
+            "uniqueItems": true,
+            "description": "Hide work items with one of the following states"
+          },
+          "azdevops-vscode-simplify.sortOrderOfWorkItemState": {
+            "type": "array",
+            "default": [
+              "Active",
+              "New",
+              "Resolved",
+              "Closed",
+              "Removed"
+            ],
+            "uniqueItems": true,
+            "description": "Work items are sorted by state, then by name. With this setting you're able to change the order of the states or add your own custom ones."
           },
           "azdevops-vscode-simplify.maxNumberOfWorkItems": {
             "type": "number",
@@ -151,7 +181,8 @@
     "test": "node ./out/test/runTest.js"
   },
   "extensionDependencies": [
-    "ms-vscode.azure-account"
+    "ms-vscode.azure-account",
+    "vscode.git"
   ],
   "devDependencies": {
     "@microsoft/vscode-azext-utils": "^0.3.15",
