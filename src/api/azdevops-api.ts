@@ -2,10 +2,6 @@ import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
 import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, sortOrderOfWorkItemState } from '../helpers';
 
-let bugIcon = new vscode.ThemeIcon("bug");
-let taskIcon = new vscode.ThemeIcon("pass");
-let userStoryIcon = new vscode.ThemeIcon("book");
-
 export async function getOrganizations(): Promise<Organization[]> {
     try {
         let connection = getAzureDevOpsConnection();
