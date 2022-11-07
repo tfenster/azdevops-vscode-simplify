@@ -170,7 +170,7 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
                 skip += 200;
             } while (skip < wiIds.length);
             const resolvedWorkItemBlocks = await Promise.all<any[]>(workItemPromises);
-            let workItems: any[] = []
+            let workItems: any[] = [];
             for (const resolvedWorkItemBlock of resolvedWorkItemBlocks)
             { workItems = workItems.concat(resolvedWorkItemBlock); };
             workItems.sort(sortWorkItems);
