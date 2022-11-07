@@ -167,7 +167,8 @@
     "test": "node ./out/test/runTest.js"
   },
   "extensionDependencies": [
-    "ms-vscode.azure-account"
+    "ms-vscode.azure-account",
+    "vscode.git"
   ],
   "devDependencies": {
     "@microsoft/vscode-azext-utils": "^0.3.15",
