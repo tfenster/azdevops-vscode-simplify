@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { getConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, sortOrderOfWorkItemState } from '../extension';
+import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, sortOrderOfWorkItemState } from '../helpers';
 
 let bugIcon = new vscode.ThemeIcon("bug");
 let taskIcon = new vscode.ThemeIcon("pass");
@@ -8,7 +8,7 @@ let userStoryIcon = new vscode.ThemeIcon("book");
 
 export async function getOrganizations(): Promise<Organization[]> {
     try {
-        let connection = getConnection();
+        let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/account/accounts/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseAccounts = await connection.get(`https://app.vssps.visualstudio.com/_apis/accounts?memberId=${memberId}&api-version=6.0-preview.1`);
@@ -28,7 +28,7 @@ export async function getOrganizations(): Promise<Organization[]> {
 
 export async function getProjects(organization: Organization): Promise<Project[]> {
     try {
-        let connection = getConnection();
+        let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseProjects = await connection.get(`${organization.url}/_apis/projects?api-version=6.0`);
         let projects = new Array<Project>();
@@ -92,7 +92,7 @@ async function getWorkItemTypesOfProject(orgUrl: string, projectNameHtmlEncoded:
     return []
 }
 async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string): Promise<{ name: string; devOpsIcon: string; referenceName: string }[]> {
-    const connection = getConnection();
+    const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1&tabs=HTTP
     const workItemTypes = await connection.get(`${orgUrl}/_apis/work/processes/${processTypeId}/workitemtypes?api-version=7.1-preview.2`);
     if (workItemTypes && workItemTypes.value)
@@ -113,7 +113,7 @@ async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtml
 
     const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = []
     relevantWorkItemTypes.push({ name: "Bug", devOpsIcon: workItemTypes.find(entry => entry.name == "Bug")!.devOpsIcon })
-    const connection = getConnection();
+    const connection = getAzureDevOpsConnection();
     for (const workItemType of workItemTypes) {
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
         const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcess.typeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
@@ -125,7 +125,7 @@ async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtml
     return relevantWorkItemTypes;
 }
 async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ typeId: string; } | undefined> {
-    const connection = getConnection();
+    const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/processes/list?view=azure-devops-rest-7.1&tabs=HTTP
     const devOpsProcesses = await connection.get(`${orgUrl}/_apis/work/processes?$expand=projects&api-version=7.1-preview.2`);
     if (devOpsProcesses && devOpsProcesses.value) {
@@ -152,7 +152,7 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
 
 async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<any> {
     try {
-        let connection = getConnection();
+        let connection = getAzureDevOpsConnection();
         let maxNumberOfWorkItemsParam = "";
         if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1&tabs=HTTP
@@ -347,7 +347,7 @@ export class WorkItem extends vscode.TreeItem {
                     // get substring after last slash
                     let remoteRepoName = repo.state.remotes[0].fetchUrl;
                     remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
-                    let remoteRepo = await getConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
+                    let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
                     let upstreamRef = repo.state.HEAD.upstream;
                     await repo.createBranch(newBranch, true);
                     await repo.push(upstreamRef.remote, newBranch, true);
@@ -369,7 +369,7 @@ export class WorkItem extends vscode.TreeItem {
                             }
                         }
                     };
-                    await getConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
+                    await getAzureDevOpsConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
                     vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
                 } else {
                     vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
