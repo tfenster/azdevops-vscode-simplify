@@ -126,6 +126,19 @@
       {
         "title": "Azure DevOps Simplify",
         "properties": {
+          "azdevops-vscode-simplify.showWorkItemTypes": {
+            "type": "array",
+            "default": [],
+            "examples": [
+              [
+                "User Story",
+                "Bug",
+                "Task"
+              ]
+            ],
+            "uniqueItems": true,
+            "description": "Show all work items with one of the following types. If it's empty, we're trying to figure out the relevant work items on our own."
+          },
           "azdevops-vscode-simplify.hideWorkItemsWithState": {
             "type": "array",
             "default": [
