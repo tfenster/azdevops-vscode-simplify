@@ -275,11 +275,11 @@ export async function getQueries(project: Project): Promise<Query[]> {
     let defaultFilter = "[System.TeamProject] = @project AND [System.WorkItemType] IN ('User Story','Bug','Task')";
     let orderBy = "ORDER BY [System.ChangedDate] DESC";
     return [
-        new Query("Assigned to me", "1", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.AssignedTo] = @me ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Followed by me", "2", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@Follows) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recent activity by me", "3", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@MyRecentActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recent activity in project", "4", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentProjectActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recently mentioned", "5", project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentMentions) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new Query("Assigned to me", `${project.id}-1`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.AssignedTo] = @me ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new Query("Followed by me", `${project.id}-2`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@Follows) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new Query("Recent activity by me", `${project.id}-3`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@MyRecentActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new Query("Recent activity in project", `${project.id}-4`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentProjectActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new Query("Recently mentioned", `${project.id}-5`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentMentions) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
     ];
 }
 
