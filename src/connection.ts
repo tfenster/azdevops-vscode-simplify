@@ -34,7 +34,7 @@ export class AzDevOpsConnection {
                 }
                 AzDevOpsConnection.memberId = memberIdData.id;
             } catch (error) {
-                console.log(error);
+                console.error(error);
                 vscode.window.showErrorMessage(`Unexpected error when trying to retrieve your member id: ${error}`);
             }
         }

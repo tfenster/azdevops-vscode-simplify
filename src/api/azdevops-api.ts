@@ -6,6 +6,8 @@ export async function getOrganizations(): Promise<Organization[]> {
     try {
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
+        if (memberId === undefined)
+            return []
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/account/accounts/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseAccounts = await connection.get(`https://app.vssps.visualstudio.com/_apis/accounts?memberId=${memberId}&api-version=6.0-preview.1`);
         if (responseAccounts === undefined) {
@@ -191,15 +193,21 @@ async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded:
 }
 
 export async function getWorkItems(query: Query): Promise<WorkItem[]> {
-    let responseWIDetails = await loadWorkItems(query.query, query.parent.parent.url, query.parent.url, true);
-    let wiDetails = new Array<WorkItem>();
-    const projectNameHtmlEncoded = query.parent.label;
-    const workItemTypes = await getWorkItemTypesOfProject(query.parent.parent.url, projectNameHtmlEncoded);
-    await responseWIDetails.value.forEach((wi: any) => {
-        const themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemTypes.find(workItemType => workItemType.name === wi.fields["System.WorkItemType"])!.devOpsIcon);
-        wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
-    });
-    return wiDetails;
+    try {
+        let responseWIDetails = await loadWorkItems(query.query, query.parent.parent.url, query.parent.url, true);
+        let wiDetails = new Array<WorkItem>();
+        const projectNameHtmlEncoded = query.parent.label;
+        const workItemTypes = await getWorkItemTypesOfProject(query.parent.parent.url, projectNameHtmlEncoded);
+        await responseWIDetails.value.forEach((wi: any) => {
+            const themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemTypes.find(workItemType => workItemType.name === wi.fields["System.WorkItemType"])!.devOpsIcon);
+            wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
+        });
+        return wiDetails;
+    } catch (error) {
+        vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
+        console.error(error);
+        return [];
+    }
 }
 
 async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<any> {
