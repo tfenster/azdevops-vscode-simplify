@@ -29,7 +29,7 @@ export class AzDevOpsConnection {
             try {
             // https://learn.microsoft.com/en-us/rest/api/azure/devops/profile/profiles/get?view=azure-devops-rest-7.1&tabs=HTTP
             const memberIdData = await this.get('https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0');
-                if (memberIdData === undefined) {
+                if (!memberIdData) {
                 return undefined;
             }
                 AzDevOpsConnection.memberId = memberIdData.id;
