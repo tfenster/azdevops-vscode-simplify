@@ -8,11 +8,11 @@ export async function getOrganizations(): Promise<Organization[]> {
         let memberId = await connection.getMemberId();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/account/accounts/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseAccounts = await connection.get(`https://app.vssps.visualstudio.com/_apis/accounts?memberId=${memberId}&api-version=6.0-preview.1`);
-        if (responseAccounts.authFailure) {
+        if (responseAccounts === undefined) {
             return [];
         }
         let orgs = new Array<Organization>();
-        await responseAccounts.responseData.value.forEach((account: any) => {
+        await responseAccounts.value.forEach((account: any) => {
             orgs.push(new Organization(account.accountName, `https://dev.azure.com/${account.accountName}`,
                 account.accountId, vscode.TreeItemCollapsibleState.Collapsed));
         });
@@ -30,11 +30,11 @@ export async function getProjects(organization: Organization): Promise<Project[]
         let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseProjects = await connection.get(`${organization.url}/_apis/projects?api-version=6.0`);
-        if (responseProjects.authFailure) {
+        if (responseProjects === undefined) {
             return [];
         }
         let projects = new Array<Project>();
-        await responseProjects.responseData.value.forEach((project: any) => {
+        await responseProjects.value.forEach((project: any) => {
             projects.push(new Project(project.name, `${organization.url}/${project.id}`, project.id, organization,
                 vscode.TreeItemCollapsibleState.Collapsed));
         });
@@ -98,11 +98,11 @@ async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string):
     const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1&tabs=HTTP
     const workItemTypes = await connection.get(`${orgUrl}/_apis/work/processes/${processTypeId}/workitemtypes?api-version=7.1-preview.2`);
-    if (workItemTypes.authFailure) {
+    if (workItemTypes === undefined) {
         return [];
     }
-    if (workItemTypes && workItemTypes.responseData && workItemTypes.responseData.value) {
-        return workItemTypes.responseData.value.map((workItemType: any) => {
+    if (workItemTypes.value) {
+        return workItemTypes.value.map((workItemType: any) => {
             return {
                 name: workItemType.name,
                 devOpsIcon: workItemType.icon,
@@ -166,11 +166,11 @@ async function checkIsRelevantWorkItemTypeOfProject(connection: AzDevOpsConnecti
     let isRelevant = false;
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
     const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcessTypeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
-    if (workItemTypeBehaviors.authFailure) {
+    if (workItemTypeBehaviors === undefined) {
         return { workItemType, isRelevant };
     }
-    if (workItemTypeBehaviors && workItemTypeBehaviors.responseData && workItemTypeBehaviors.responseData.value) {
-        isRelevant = workItemTypeBehaviors.responseData.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
+    if (workItemTypeBehaviors.value) {
+        isRelevant = workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
     }
     return { workItemType, isRelevant };
 }
@@ -178,11 +178,11 @@ async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded:
     const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/processes/list?view=azure-devops-rest-7.1&tabs=HTTP
     const devOpsProcesses = await connection.get(`${orgUrl}/_apis/work/processes?$expand=projects&api-version=7.1-preview.2`);
-    if (devOpsProcesses.authFailure) {
+    if (devOpsProcesses === undefined) {
         return undefined;
     }
-    if (devOpsProcesses && devOpsProcesses.responseData && devOpsProcesses.responseData.value) {
-        const devOpsProcess: { typeId: string; } | undefined = devOpsProcesses.responseData.value.find((process: { typeId: string; projects: { name: string; }[] | undefined; }) => {
+    if (devOpsProcesses.value) {
+        const devOpsProcess: { typeId: string; } | undefined = devOpsProcesses.value.find((process: { typeId: string; projects: { name: string; }[] | undefined; }) => {
             if (process.projects) { return process.projects.find((project: { name: string; }) => project.name === decodeURI(projectNameHtmlEncoded)); }
         });
         return devOpsProcess;
@@ -209,10 +209,10 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
         if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1&tabs=HTTP
         let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
-        if (responseWIIds.authFailure) {
+        if (responseWIIds === undefined) {
             return { count: 0, value: [] };
         }
-        let wiIds: number[] = responseWIIds.responseData.workItems?.map((wi: any) => <Number>wi.id);
+        let wiIds: number[] = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
 
         if (wiIds?.length > 0) {
             let workItemPromises: Promise<any[]>[] = [];
@@ -241,11 +241,10 @@ async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, 
         };
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1&tabs=HTTP
         let workItemsPartResponse = await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
-        if (workItemsPartResponse.authFailure) {
+        if (workItemsPartResponse === undefined || workItemsPartResponse.value === undefined) {
             return [];
         }
-        let workItemsPart: { count: number; value: any[]; } = workItemsPartResponse.responseData;
-        return workItemsPart.value;
+        return workItemsPartResponse.value;
     }
 }
 
@@ -401,33 +400,37 @@ export class WorkItem extends vscode.TreeItem {
                     // get substring after last slash
                     let remoteRepoName = repo.state.remotes[0].fetchUrl;
                     remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
-                    let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
-                    if (remoteRepo.authFailure) {
-                        return;
-                    }
-                    let upstreamRef = repo.state.HEAD.upstream;
-                    await repo.createBranch(newBranch, true);
-                    await repo.push(upstreamRef.remote, newBranch, true);
-                    let wiLink = {
-                        // eslint-disable-next-line @typescript-eslint/naming-convention
-                        "Op": 0,
-                        // eslint-disable-next-line @typescript-eslint/naming-convention
-                        "Path": "/relations/-",
-                        // eslint-disable-next-line @typescript-eslint/naming-convention
-                        "Value": {
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "rel": "ArtifactLink",
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "url": `vstfs:///Git/Ref/${this.parent.parent.id}%2F${remoteRepo.responseData.id}%2FGB${newBranch}`,
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "attributes": {
-                                // eslint-disable-next-line @typescript-eslint/naming-convention
-                                "name": "Branch"
-                            }
+                    try {
+                        let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
+                        if (remoteRepo === undefined) {
+                            return;
                         }
-                    };
-                    await getAzureDevOpsConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
-                    vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
+                        let upstreamRef = repo.state.HEAD.upstream;
+                        await repo.createBranch(newBranch, true);
+                        await repo.push(upstreamRef.remote, newBranch, true);
+                        let wiLink = {
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "Op": 0,
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "Path": "/relations/-",
+                            // eslint-disable-next-line @typescript-eslint/naming-convention
+                            "Value": {
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "rel": "ArtifactLink",
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "url": `vstfs:///Git/Ref/${this.parent.parent.id}%2F${remoteRepo.id}%2FGB${newBranch}`,
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "attributes": {
+                                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                                    "name": "Branch"
+                                }
+                            }
+                        };
+                        await getAzureDevOpsConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
+                        vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
+                    } catch (error) {
+                        vscode.window.showErrorMessage(`Failed to create branch ${newBranch} and/or link it to work item ${this.wiId}`);
+                    }
                 } else {
                     vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
                 }

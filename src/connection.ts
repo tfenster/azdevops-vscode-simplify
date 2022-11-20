@@ -1,6 +1,6 @@
 import { AccessToken } from "@azure/core-auth";
 import { AzureExtensionApiProvider } from "@microsoft/vscode-azext-utils/api";
-import axios from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 import * as vscode from 'vscode';
 import { AzureAccountExtensionApi } from "./types/azure-account.api";
 
@@ -26,12 +26,17 @@ export class AzDevOpsConnection {
 
     public async getMemberId(): Promise<string | undefined> {
         if (AzDevOpsConnection.memberId === undefined) {
+            try {
             // https://learn.microsoft.com/en-us/rest/api/azure/devops/profile/profiles/get?view=azure-devops-rest-7.1&tabs=HTTP
             const memberIdData = await this.get('https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0');
-            if (!memberIdData || !memberIdData.responseData || !memberIdData.responseData.id) {
+                if (memberIdData === undefined) {
                 return undefined;
             }
-            AzDevOpsConnection.memberId = memberIdData.responseData.id;
+                AzDevOpsConnection.memberId = memberIdData.id;
+            } catch (error) {
+                console.log(error);
+                vscode.window.showErrorMessage(`Unexpected error when trying to retrieve your member id: ${error}`);
+            }
         }
         return AzDevOpsConnection.memberId;
     }
@@ -55,70 +60,47 @@ export class AzDevOpsConnection {
         return AzDevOpsConnection.token;
     }
 
-    public async get(url: string): Promise<{ responseData: any | undefined, authFailure: boolean }> {
+    public async get(url: string): Promise<any | undefined> {
+        return await this.call(url, "get");
+    }
+
+    public async post(url: string, body: any): Promise<any | undefined> {
+        return await this.call(url, "post", body, "application/json");
+    }
+
+    public async patch(url: string, body: any, contentType: string = "application/json"): Promise<any | undefined> {
+        return await this.call(url, "patch", body, contentType);
+    }
+
+    private async call(url: string, method: string, body: any | undefined = undefined, contentType: string | undefined = undefined): Promise<any | undefined> {
         try {
             let token = await this.getToken();
             if (token === undefined) {
-                return { responseData: undefined, authFailure: true };
+                return undefined;
             }
-            const response = axios.get(url, {
+            let axiosRequestConfig: AxiosRequestConfig = {
                 headers: {
                     // eslint-disable-next-line @typescript-eslint/naming-convention
                     "Authorization": `Bearer ${token?.token}`
-                }
-            });
-            return { responseData: (await response).data, authFailure: false };
-        } catch (error) {
-            vscode.window.showErrorMessage(`An unexpected error occurred during a get request to the backend: ${error}`);
-            console.error(error);
-            console.error(`url: ${url}`);
-            return { responseData: undefined, authFailure: false };
-        }
-    }
+                },
+                url: url,
+                method: method
+            };
 
-    public async post(url: string, body: any): Promise<{ responseData: any | undefined, authFailure: boolean }> {
-        try {
-            let token = await this.getToken();
-            if (token === undefined) {
-                return { responseData: undefined, authFailure: true };
+            if (body !== undefined) {
+                axiosRequestConfig.data = JSON.stringify(body);
             }
-            const response = axios.post(url, JSON.stringify(body), {
-                headers: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    "Authorization": `Bearer ${token?.token}`,
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    "Content-Type": "application/json"
-                }
-            });
-            return { responseData: (await response).data, authFailure: false };
-        } catch (error) {
-            vscode.window.showErrorMessage(`An unexpected error occurred during a post request to the backend: ${error}`);
-            console.error(error);
-            console.error(`url: ${url}, body: ${JSON.stringify(body)}`);
-            return { responseData: undefined, authFailure: false };
-        }
-    }
 
-    public async patch(url: string, body: any, contentType: string = "application/json"): Promise<{ responseData: any | undefined, authFailure: boolean }> {
-        try {
-            let token = await this.getToken();
-            if (token === undefined) {
-                return { responseData: undefined, authFailure: true };
+            if (contentType !== undefined) {
+                axiosRequestConfig.headers!["Content-Type"] = contentType;
             }
-            const response = axios.patch(url, JSON.stringify(body), {
-                headers: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    "Authorization": `Bearer ${token?.token}`,
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    "Content-Type": contentType
-                }
-            });
-            return { responseData: (await response).data, authFailure: false };
+
+            const response = await axios(axiosRequestConfig);
+            return response.data;
         } catch (error) {
-            vscode.window.showErrorMessage(`An unexpected error occurred during a patch request to the backend: ${error}`);
+            console.error(`method: ${method}, url: ${url}${body !== undefined ? `, body: ${JSON.stringify(body)}` : ""}${contentType !== undefined ? `, contentType: ${contentType}` : ""}`);
             console.error(error);
-            console.error(`url: ${url}, body: ${JSON.stringify(body)}`);
-            return { responseData: undefined, authFailure: false };
+            throw error;
         }
     }
 }
