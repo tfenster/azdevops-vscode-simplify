@@ -31,15 +31,21 @@ export async function activate(context: vscode.ExtensionContext) {
 export function deactivate() { }
 
 async function selectWorkItem() {
-	const workItems = await getAllWorkItemsAsQuickpicks();
-	if (workItems && workItems.length > 0) {
-		const workItem = await vscode.window.showQuickPick(workItems, {
-			title: 'Search for the title or ID of the work item you want to add to the commit message',
-			ignoreFocusOut: true,
-			matchOnDescription: true
-		});
-		if (workItem) {
-			getGitExtension().appendToCheckinMessage(`#${workItem.description!}`);
+	try {
+		const workItems = await getAllWorkItemsAsQuickpicks();
+		if (workItems && workItems.length > 0) {
+			const workItem = await vscode.window.showQuickPick(workItems, {
+				title: 'Search for the title or ID of the work item you want to add to the commit message',
+				ignoreFocusOut: true,
+				matchOnDescription: true
+			});
+			if (workItem) {
+				getGitExtension().appendToCheckinMessage(`#${workItem.description!}`);
+			}
 		}
+	} catch (error) {
+		vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
+		console.error(error);
+		return [];
 	}
 }
