@@ -69,10 +69,9 @@ export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickIte
             }
             if (pathSegments && pathSegments.length > 1) {
                 const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
-                const projectNameHtmlEncoded = pathSegments[1];
-                const projectUrl = `${orgUrl}/${projectNameHtmlEncoded}`;
+                const projectUrl = `${orgUrl}/${pathSegments[1]}`;
                 const query = await createQueryString("", projectUrl);
-                const workItems = await loadWorkItemObjects(query, orgUrl, projectUrl, projectNameHtmlEncoded, false);
+                const workItems = await loadWorkItemObjects(query, orgUrl, projectUrl, false);
                 const wiDetails: vscode.QuickPickItem[] = workItems.map((wi: IWorkItem) => {
                     return {
                         label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
@@ -213,7 +212,7 @@ async function getDevOpsProcessOfProject(projectUrl: string): Promise<{ typeId: 
 
 export async function getWorkItemTreeItems(queryTreeItem: QueryTreeItem): Promise<WorkItemTreeItem[]> {
     try {
-        const workItems: IWorkItem[] = await loadWorkItemObjects(queryTreeItem.query, queryTreeItem.parent.parent.url, queryTreeItem.parent.url, queryTreeItem.parent.label, true);
+        const workItems: IWorkItem[] = await loadWorkItemObjects(queryTreeItem.query, queryTreeItem.parent.parent.url, queryTreeItem.parent.url, true);
         const wiDetails = new Array<WorkItemTreeItem>();
         for (const wi of workItems) {
             wiDetails.push(new WorkItemTreeItem(wi.fields["System.Title"], `${queryTreeItem.id}-${wi.id}`, wi.id, queryTreeItem, `${queryTreeItem.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), wi.themeIcon, vscode.TreeItemCollapsibleState.None));
@@ -225,14 +224,12 @@ export async function getWorkItemTreeItems(queryTreeItem: QueryTreeItem): Promis
         return [];
     }
 }
-async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: string, projectNameHtmlEncoded: string | undefined, considerMaxNumberOfWorkItems: boolean): Promise<IWorkItem[]> {
+async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<IWorkItem[]> {
     const workItems: IWorkItem[] = await loadWorkItems(query, orgUrl, projectUrl, considerMaxNumberOfWorkItems);
-    if (projectNameHtmlEncoded) {
-        const workItemTypes = await getWorkItemTypesOfProject(projectUrl);
-        for (const workItem of workItems) {
-            const workItemType = workItemTypes.find(entry => entry.name === workItem.fields["System.WorkItemType"])!
-            workItem.themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemType.devOpsIcon);
-        }
+    const workItemTypes = await getWorkItemTypesOfProject(projectUrl);
+    for (const workItem of workItems) {
+        const workItemType = workItemTypes.find(entry => entry.name === workItem.fields["System.WorkItemType"])!
+        workItem.themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemType.devOpsIcon);
     }
     return workItems;
 
