@@ -2,7 +2,11 @@ import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
 import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState } from '../helpers';
 
-export async function getOrganizations(): Promise<Organization[]> {
+interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
+interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
+const workItemTypesOfProjects: Map<string, IWorkItemType[]> = new Map();
+
+export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
@@ -13,9 +17,9 @@ export async function getOrganizations(): Promise<Organization[]> {
         if (responseAccounts === undefined) {
             return [];
         }
-        let orgs = new Array<Organization>();
+        let orgs = new Array<OrganizationTreeItem>();
         await responseAccounts.value.forEach((account: any) => {
-            orgs.push(new Organization(account.accountName, `https://dev.azure.com/${account.accountName}`,
+            orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`,
                 account.accountId, vscode.TreeItemCollapsibleState.Collapsed));
         });
         orgs.sort((a, b) => a.label.localeCompare(b.label));
@@ -27,7 +31,7 @@ export async function getOrganizations(): Promise<Organization[]> {
     }
 }
 
-export async function getProjects(organization: Organization): Promise<Project[]> {
+export async function getProjects(organization: OrganizationTreeItem): Promise<ProjectTreeItem[]> {
     try {
         let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
@@ -35,9 +39,9 @@ export async function getProjects(organization: Organization): Promise<Project[]
         if (responseProjects === undefined) {
             return [];
         }
-        let projects = new Array<Project>();
+        let projects = new Array<ProjectTreeItem>();
         await responseProjects.value.forEach((project: any) => {
-            projects.push(new Project(project.name, `${organization.url}/${project.id}`, project.id, organization,
+            projects.push(new ProjectTreeItem(project.name, `${organization.url}/${project.id}`, project.id, organization,
                 vscode.TreeItemCollapsibleState.Collapsed));
         });
         projects.sort((a, b) => a.label.localeCompare(b.label));
@@ -66,15 +70,12 @@ export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickIte
             if (pathSegments && pathSegments.length > 1) {
                 const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
                 const projectNameHtmlEncoded = pathSegments[1];
-                const relevantWorkItemTypes = await getRelevantWorkItemTypesOfProject(orgUrl, projectNameHtmlEncoded);
-                const relevantWorkItemTypesAsString = relevantWorkItemTypes.map(entry => `'${entry.name}'`).join(',');
-                const query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN (${relevantWorkItemTypesAsString}) ORDER BY [System.ChangedDate] DESC`;
                 const projectUrl = `${orgUrl}/${projectNameHtmlEncoded}`;
-                const responseWIDetails = await loadWorkItems(query, orgUrl, projectUrl, false);
-                const wiDetails: vscode.QuickPickItem[] = responseWIDetails.value.map((wi: any) => {
-                    const themeIcon = mapDevOpsWorkItemTypeToThemeIcon(relevantWorkItemTypes.find(entry => entry.name === wi.fields["System.WorkItemType"])!.devOpsIcon);
+                const query = await createQueryString("", projectUrl);
+                const workItems = await loadWorkItemObjects(query, orgUrl, projectUrl, projectNameHtmlEncoded, false);
+                const wiDetails: vscode.QuickPickItem[] = workItems.map((wi: IWorkItem) => {
                     return {
-                        label: `$(${themeIcon.id}) ${wi.fields["System.Title"]}`,
+                        label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
                         description: `${wi.id}`,
                         detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}`
                     };
@@ -89,14 +90,14 @@ export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickIte
     }
 }
 
-async function getWorkItemTypesOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ name: string; devOpsIcon: string; referenceName: string }[]> {
-    const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(orgUrl, projectNameHtmlEncoded);
+async function getWorkItemTypesOfProject(projectUrl: string): Promise<IWorkItemType[]> {
+    const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(projectUrl);
     if (devOpsProcess) {
-        return await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId);
+        return await getWorkItemTypesOfProcess(analyzeProjectUrl(projectUrl).orgUrl, devOpsProcess.typeId);
     }
     return [];
 }
-async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string): Promise<{ name: string; devOpsIcon: string; referenceName: string }[]> {
+async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string): Promise<IWorkItemType[]> {
     const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1&tabs=HTTP
     const workItemTypes = await connection.get(`${orgUrl}/_apis/work/processes/${processTypeId}/workitemtypes?api-version=7.1-preview.2`);
@@ -114,36 +115,54 @@ async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string):
     }
     return [];
 }
-interface IWorkItemType { name: string; devOpsIcon: string; referenceName: string };
-async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ name: string; devOpsIcon: string }[]> {
-    try {
-        const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(orgUrl, projectNameHtmlEncoded);
-        if (!devOpsProcess) { return []; }
-        const workItemTypes: IWorkItemType[] = await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId);
 
-        const settingShowWorkItemTypes: string[] = showWorkItemTypes();
+async function getRelevantWorkItemTypesOfProject(projectUrl: string): Promise<IWorkItemType[]> {
+    if (workItemTypesOfProjects.has(projectUrl))
+        return workItemTypesOfProjects.get(projectUrl)!
+
+    const orgUrl = analyzeProjectUrl(projectUrl).orgUrl
+
+    let defaultWorkItemTypeToIconMapping: IWorkItemType[] = [
+        { name: 'User Story', devOpsIcon: 'icon_book' },
+        { name: 'Bug', devOpsIcon: 'icon_insect' },
+        { name: 'Task', devOpsIcon: 'icon_clipboard' }
+    ]
+    let workItemTypesOfProject: IWorkItemType[]
+    const settingShowWorkItemTypes: string[] = showWorkItemTypes();
+    try {
+        const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(projectUrl);
+        if (!devOpsProcess) { return []; }
+        const customWorkItemTypesSetUpInDevOps: IWorkItemType[] = await getWorkItemTypesOfProcess(orgUrl, devOpsProcess.typeId);
         if (settingShowWorkItemTypes.length > 0) {
-            return getRelevantWorkItemsBasedOnSettings(workItemTypes, settingShowWorkItemTypes);
+            workItemTypesOfProject = enrichWorkItemTypeNamesWithIcons(settingShowWorkItemTypes, customWorkItemTypesSetUpInDevOps);
         } else {
-            return await getRelevantWorkItemsBasedOnDevOps(workItemTypes, devOpsProcess.typeId);
+            workItemTypesOfProject = await getRelevantWorkItemsBasedOnDevOps(customWorkItemTypesSetUpInDevOps, orgUrl, devOpsProcess.typeId);
         }
     } catch {
-        return [
-            { name: 'User Story', devOpsIcon: 'icon_book' },
-            { name: 'Bug', devOpsIcon: 'icon_insect' },
-            { name: 'Task', devOpsIcon: 'icon_clipboard' }
-        ];
+        if (settingShowWorkItemTypes.length > 0)
+            workItemTypesOfProject = enrichWorkItemTypeNamesWithIcons(settingShowWorkItemTypes, defaultWorkItemTypeToIconMapping);
+        else
+            workItemTypesOfProject = defaultWorkItemTypeToIconMapping;
     }
+    workItemTypesOfProjects.set(projectUrl, workItemTypesOfProject)
+    return workItemTypesOfProject
 
-    function getRelevantWorkItemsBasedOnSettings(workItemTypes: IWorkItemType[], settingShowWorkItemTypes: string[]) {
-        const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = [];
-        for (const settingShowWorkItemType of settingShowWorkItemTypes) {
-            const workItemType: IWorkItemType | undefined = workItemTypes.find(entry => entry.name === settingShowWorkItemType);
-            if (workItemType) { relevantWorkItemTypes.push(workItemType); }
+    function enrichWorkItemTypeNamesWithIcons(settingShowWorkItemTypeNames: string[], workItemTypes: IWorkItemType[]): IWorkItemType[] {
+        const returnWorkItemTypes: IWorkItemType[] = [];
+        for (const settingShowWorkItemTypeName of settingShowWorkItemTypeNames) {
+            const workItemType: IWorkItemType | undefined = workItemTypes.find(entry => entry.name === settingShowWorkItemTypeName);
+            if (workItemType) {
+                returnWorkItemTypes.push(workItemType);
+            } else {
+                returnWorkItemTypes.push({
+                    name: settingShowWorkItemTypeName,
+                    devOpsIcon: 'icon_github_issue'
+                })
+            }
         }
-        return relevantWorkItemTypes;
+        return returnWorkItemTypes;
     }
-    async function getRelevantWorkItemsBasedOnDevOps(workItemTypes: IWorkItemType[], devOpsProcessTypeId: string) {
+    async function getRelevantWorkItemsBasedOnDevOps(workItemTypes: IWorkItemType[], orgUrl: string, devOpsProcessTypeId: string) {
         const relevantWorkItemTypes: { name: string; devOpsIcon: string }[] = [];
         const bugWorkItemType: IWorkItemType | undefined = workItemTypes.find(entry => entry.name === "Bug");
         if (bugWorkItemType) {
@@ -166,42 +185,39 @@ async function getRelevantWorkItemTypesOfProject(orgUrl: string, projectNameHtml
 }
 async function checkIsRelevantWorkItemTypeOfProject(connection: AzDevOpsConnection, orgUrl: string, devOpsProcessTypeId: string, workItemType: IWorkItemType): Promise<{ workItemType: IWorkItemType, isRelevant: boolean }> {
     let isRelevant = false;
-    // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
-    const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcessTypeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
-    if (workItemTypeBehaviors === undefined) {
-        return { workItemType, isRelevant };
-    }
-    if (workItemTypeBehaviors.value) {
-        isRelevant = workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
+    if (workItemType.referenceName) {
+        // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
+        const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcessTypeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
+        if (workItemTypeBehaviors && workItemTypeBehaviors.value)
+            isRelevant = workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
     }
     return { workItemType, isRelevant };
 }
-async function getDevOpsProcessOfProject(orgUrl: string, projectNameHtmlEncoded: string): Promise<{ typeId: string; } | undefined> {
+async function getDevOpsProcessOfProject(projectUrl: string): Promise<{ typeId: string; } | undefined> {
+    const projectUrlParts = analyzeProjectUrl(projectUrl);
+
     const connection = getAzureDevOpsConnection();
     // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/processes/list?view=azure-devops-rest-7.1&tabs=HTTP
-    const devOpsProcesses = await connection.get(`${orgUrl}/_apis/work/processes?$expand=projects&api-version=7.1-preview.2`);
+    const devOpsProcesses = await connection.get(`${projectUrlParts.orgUrl}/_apis/work/processes?$expand=projects&api-version=7.1-preview.2`);
     if (devOpsProcesses === undefined) {
         return undefined;
     }
     if (devOpsProcesses.value) {
-        const devOpsProcess: { typeId: string; } | undefined = devOpsProcesses.value.find((process: { typeId: string; projects: { name: string; }[] | undefined; }) => {
-            if (process.projects) { return process.projects.find((project: { name: string; }) => project.name === decodeURI(projectNameHtmlEncoded)); }
+        const devOpsProcess: { typeId: string; } | undefined = devOpsProcesses.value.find((process: { typeId: string; projects: { id: string; name: string }[] | undefined; }) => {
+            if (process.projects) { return process.projects.find((project: { id: string; name: string }) => [project.id, project.name].includes(projectUrlParts.projectNameOrId)); }
         });
         return devOpsProcess;
     }
     return undefined;
 }
 
-export async function getWorkItems(query: Query): Promise<WorkItem[]> {
+export async function getWorkItemTreeItems(queryTreeItem: QueryTreeItem): Promise<WorkItemTreeItem[]> {
     try {
-        let responseWIDetails = await loadWorkItems(query.query, query.parent.parent.url, query.parent.url, true);
-        let wiDetails = new Array<WorkItem>();
-        const projectNameHtmlEncoded = query.parent.label;
-        const workItemTypes = await getWorkItemTypesOfProject(query.parent.parent.url, projectNameHtmlEncoded);
-        await responseWIDetails.value.forEach((wi: any) => {
-            const themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemTypes.find(workItemType => workItemType.name === wi.fields["System.WorkItemType"])!.devOpsIcon);
-            wiDetails.push(new WorkItem(wi.fields["System.Title"], `${query.id}-${wi.id}`, wi.id, query, `${query.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), themeIcon, vscode.TreeItemCollapsibleState.None));
-        });
+        const workItems: IWorkItem[] = await loadWorkItemObjects(queryTreeItem.query, queryTreeItem.parent.parent.url, queryTreeItem.parent.url, queryTreeItem.parent.label, true);
+        const wiDetails = new Array<WorkItemTreeItem>();
+        for (const wi of workItems) {
+            wiDetails.push(new WorkItemTreeItem(wi.fields["System.Title"], `${queryTreeItem.id}-${wi.id}`, wi.id, queryTreeItem, `${queryTreeItem.parent.parent.url}/_workitems/edit/${wi.id}`, wi.fields["System.State"], wi.fields["System.WorkItemType"], (wi.fields["System.AssignedTo"] === undefined ? "no one" : wi.fields["System.AssignedTo"].displayName), wi.themeIcon, vscode.TreeItemCollapsibleState.None));
+        }
         return wiDetails;
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
@@ -209,51 +225,70 @@ export async function getWorkItems(query: Query): Promise<WorkItem[]> {
         return [];
     }
 }
-
-async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<any> {
-    try {
-        let connection = getAzureDevOpsConnection();
-        let maxNumberOfWorkItemsParam = "";
-        if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
-        // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1&tabs=HTTP
-        let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
-        if (responseWIIds === undefined) {
-            return { count: 0, value: [] };
+async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: string, projectNameHtmlEncoded: string | undefined, considerMaxNumberOfWorkItems: boolean): Promise<IWorkItem[]> {
+    const workItems: IWorkItem[] = await loadWorkItems(query, orgUrl, projectUrl, considerMaxNumberOfWorkItems);
+    if (projectNameHtmlEncoded) {
+        const workItemTypes = await getWorkItemTypesOfProject(projectUrl);
+        for (const workItem of workItems) {
+            const workItemType = workItemTypes.find(entry => entry.name === workItem.fields["System.WorkItemType"])!
+            workItem.themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemType.devOpsIcon);
         }
-        let wiIds: number[] = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
-
-        if (wiIds?.length > 0) {
-            let workItemPromises: Promise<any[]>[] = [];
-            let skip = 0;
-            let top = 200;
-            do {
-                workItemPromises.push(loadWorkItemPart(wiIds.slice(skip, skip + top), connection, orgUrl));
-                skip += 200;
-            } while (skip < wiIds.length);
-            const resolvedWorkItemBlocks = await Promise.all<any[]>(workItemPromises);
-            let workItems: any[] = [];
-            for (const resolvedWorkItemBlock of resolvedWorkItemBlocks) { workItems = workItems.concat(resolvedWorkItemBlock); };
-            workItems.sort(sortWorkItems);
-            return { count: workItems.length, value: workItems };
-        }
-    } catch (error) {
-        vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
-        console.error(error);
     }
-    return { count: 0, value: [] };
+    return workItems;
 
-    async function loadWorkItemPart(wiIds: number[], connection: AzDevOpsConnection, orgUrl: string): Promise<any[]> {
-        let bodyWIDetails = {
-            "fields": ["System.Id", "System.Title", "System.State", "System.WorkItemType", "System.AssignedTo"],
-            "ids": wiIds
-        };
-        // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1&tabs=HTTP
-        let workItemsPartResponse = await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
-        if (workItemsPartResponse === undefined || workItemsPartResponse.value === undefined) {
-            return [];
+    async function loadWorkItems(query: string, orgUrl: string, projectUrl: string, considerMaxNumberOfWorkItems: boolean): Promise<IWorkItem[]> {
+        try {
+            let connection = getAzureDevOpsConnection();
+            let maxNumberOfWorkItemsParam = "";
+            if (considerMaxNumberOfWorkItems) { maxNumberOfWorkItemsParam = `&$top=${maxNumberOfWorkItems()}`; }
+            // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1&tabs=HTTP
+            let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
+            if (responseWIIds === undefined) {
+                return []
+            }
+            let wiIds: number[] = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
+
+            if (wiIds?.length > 0) {
+                let workItemPromises: Promise<IWorkItem[]>[] = [];
+                let skip = 0;
+                let top = 200;
+                do {
+                    workItemPromises.push(loadWorkItemPart(wiIds.slice(skip, skip + top), connection, orgUrl));
+                    skip += 200;
+                } while (skip < wiIds.length);
+                const resolvedWorkItemBlocks = await Promise.all<IWorkItem[]>(workItemPromises);
+                let workItems: IWorkItem[] = [];
+                for (const resolvedWorkItemBlock of resolvedWorkItemBlocks) { workItems = workItems.concat(resolvedWorkItemBlock); };
+                workItems.sort(sortWorkItems);
+                return workItems
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
+            console.error(error);
         }
-        return workItemsPartResponse.value;
+        return []
+
+        async function loadWorkItemPart(wiIds: number[], connection: AzDevOpsConnection, orgUrl: string): Promise<IWorkItem[]> {
+            let bodyWIDetails = {
+                "fields": ["System.Id", "System.Title", "System.State", "System.WorkItemType", "System.AssignedTo"],
+                "ids": wiIds
+            };
+            // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1&tabs=HTTP
+            let workItemsPartResponse = await connection.post(`${orgUrl}/_apis/wit/workitemsbatch?api-version=6.0`, bodyWIDetails);
+            if (workItemsPartResponse === undefined || workItemsPartResponse.value === undefined) {
+                return [];
+            }
+            return workItemsPartResponse.value;
+        }
     }
+}
+
+function analyzeProjectUrl(projectUrl: string): { orgUrl: string, orgName: string, projectNameOrId: string } {
+    const urlParts = projectUrl.split('/')
+    const projectNameOrId = decodeURI(urlParts.pop()!)
+    const orgName = urlParts[urlParts.length - 1]
+    const orgUrl = urlParts.join('/');
+    return { orgUrl, orgName, projectNameOrId }
 }
 
 function sortWorkItems(a: any, b: any): number {
@@ -296,23 +331,29 @@ function mapDevOpsWorkItemTypeToThemeIcon(devOpsIcon: string): vscode.ThemeIcon 
     }
 }
 
-export async function getQueries(project: Project): Promise<Query[]> {
-    let closedFilter = "";
-    for (const closedState of hideWorkItemsWithState()) {
-        closedFilter += ` AND [System.State] <> '${closedState}' `;
-    }
-    let defaultFilter = "[System.TeamProject] = @project AND [System.WorkItemType] IN ('User Story','Bug','Task')";
-    let orderBy = "ORDER BY [System.ChangedDate] DESC";
+export async function getQueries(project: ProjectTreeItem): Promise<QueryTreeItem[]> {
     return [
-        new Query("Assigned to me", `${project.id}-1`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.AssignedTo] = @me ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Followed by me", `${project.id}-2`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@Follows) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recent activity by me", `${project.id}-3`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@MyRecentActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recent activity in project", `${project.id}-4`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentProjectActivity) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
-        new Query("Recently mentioned", `${project.id}-5`, project, `Select [System.Id] From WorkItems WHERE ${defaultFilter}${closedFilter} AND [System.Id] IN (@RecentMentions) ${orderBy}`, vscode.TreeItemCollapsibleState.Collapsed),
+        new QueryTreeItem("Assigned to me", `${project.id}-1`, project, await createQueryString("[System.AssignedTo] = @me", project.url), vscode.TreeItemCollapsibleState.Collapsed),
+        new QueryTreeItem("Followed by me", `${project.id}-2`, project, await createQueryString("[System.Id] IN (@Follows)", project.url), vscode.TreeItemCollapsibleState.Collapsed),
+        new QueryTreeItem("Recent activity by me", `${project.id}-3`, project, await createQueryString("[System.Id] IN (@MyRecentActivity)", project.url), vscode.TreeItemCollapsibleState.Collapsed),
+        new QueryTreeItem("Recent activity in project", `${project.id}-4`, project, await createQueryString("[System.Id] IN (@RecentProjectActivity)", project.url), vscode.TreeItemCollapsibleState.Collapsed),
+        new QueryTreeItem("Recently mentioned", `${project.id}-5`, project, await createQueryString("[System.Id] IN (@RecentMentions)", project.url), vscode.TreeItemCollapsibleState.Collapsed),
     ];
 }
+async function createQueryString(additionalFilter: string | undefined, projectUrl: string): Promise<string> {
+    const relevantWorkItemTypes = await getRelevantWorkItemTypesOfProject(projectUrl);
+    const filterWorkItemTypes = `${relevantWorkItemTypes.map((workItemType) => `'${workItemType.name}'`).join(',')}`
 
-export class Organization extends vscode.TreeItem {
+    let query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN (${filterWorkItemTypes})`
+    for (const closedState of hideWorkItemsWithState())
+        query += ` AND [System.State] <> '${closedState}'`;
+    if (additionalFilter)
+        query += ` AND ${additionalFilter}`
+    query += " ORDER BY [System.ChangedDate] DESC";
+    return query
+}
+
+export class OrganizationTreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
@@ -332,13 +373,13 @@ export class Organization extends vscode.TreeItem {
     contextValue = 'organization';
 }
 
-export class Project extends vscode.TreeItem {
+export class ProjectTreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
         public readonly url: string,
         public readonly id: string,
-        public readonly parent: Organization,
+        public readonly parent: OrganizationTreeItem,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly command?: vscode.Command
     ) {
@@ -353,12 +394,12 @@ export class Project extends vscode.TreeItem {
     contextValue = 'project';
 }
 
-export class Query extends vscode.TreeItem {
+export class QueryTreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
         public readonly id: string,
-        public readonly parent: Project,
+        public readonly parent: ProjectTreeItem,
         public readonly query: string,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly command?: vscode.Command
@@ -374,13 +415,13 @@ export class Query extends vscode.TreeItem {
     contextValue = 'query';
 }
 
-export class WorkItem extends vscode.TreeItem {
+export class WorkItemTreeItem extends vscode.TreeItem {
 
     constructor(
         public readonly label: string,
         public readonly id: string,
         public readonly wiId: string,
-        public readonly parent: Query,
+        public readonly parent: QueryTreeItem,
         public readonly url: string,
         public readonly state: string,
         public readonly type: string,

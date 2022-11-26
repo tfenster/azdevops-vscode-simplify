@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { getOrganizations, getProjects, getQueries, getWorkItems, Organization, Project, Query } from '../api/azdevops-api';
+import { getOrganizations, getProjects, getQueries, getWorkItemTreeItems, OrganizationTreeItem, ProjectTreeItem, QueryTreeItem } from '../api/azdevops-api';
 
 export class AzDevOpsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
 
-    private _onDidChangeTreeData: vscode.EventEmitter<Organization | undefined | void> = new vscode.EventEmitter<Organization | undefined | void>();
-    readonly onDidChangeTreeData: vscode.Event<Organization | undefined | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<OrganizationTreeItem | undefined | void> = new vscode.EventEmitter<OrganizationTreeItem | undefined | void>();
+    readonly onDidChangeTreeData: vscode.Event<OrganizationTreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
     constructor() {
     }
@@ -20,12 +20,12 @@ export class AzDevOpsProvider implements vscode.TreeDataProvider<vscode.TreeItem
     async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         if (!element) {
             return await getOrganizations();
-        } else if (element instanceof Organization) {
+        } else if (element instanceof OrganizationTreeItem) {
             return await getProjects(element);
-        } else if (element instanceof Project) {
+        } else if (element instanceof ProjectTreeItem) {
             return await getQueries(element);
-        } else if (element instanceof Query) {
-            return await getWorkItems(element);
+        } else if (element instanceof QueryTreeItem) {
+            return await getWorkItemTreeItems(element);
         }
         return [];
     }
