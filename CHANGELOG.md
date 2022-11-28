@@ -8,6 +8,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 - Introduce a configuration setting `azdevops-vscode-simplify.useWorkitemIdInBranchName` to trigger the inclusion of the work item id in the proposed branch name, as proposed in #8
 - Better code when retrieving configurations
 - respect settings `hideWorkItemsWithState` and `showWorkItemTypes` in quick pick view #13
+- do not allow to create a new branch if the entered branch name is already in use #9
 
 ## [0.0.3]
 

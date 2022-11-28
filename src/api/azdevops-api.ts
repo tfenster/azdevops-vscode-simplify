@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
 import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
+import { Ref, RefType } from '../types/git';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
@@ -438,10 +439,20 @@ export class WorkItemTreeItem extends vscode.TreeItem {
     public async createBranch() {
         const repo = getGitExtension().getRepo();
         if (repo) {
+            let remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url);
+            const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!)
+            const existingRefs = remoteRefs.concat(localRefs);
             const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
             let newBranch = await vscode.window.showInputBox({
                 prompt: "Please enter the name of the new branch",
-                value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`
+                value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`,
+                validateInput: (value: string) => {
+                    const existingref = existingRefs.find(refName => refName.toLowerCase() === value.toLowerCase());
+                    if (existingref !== undefined) {
+                        return `Branch ${existingref} already exists. Please choose another one`
+                    }
+                    return undefined
+                }
             });
             if (newBranch) {
                 if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
@@ -483,6 +494,20 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                     vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
                 }
             }
+        }
+
+        async function getRemoteRefs(projectUrl: string) {
+            const listRefRespose = await getAzureDevOpsConnection().get(`${projectUrl}/_apis/git/repositories/System/refs?api-version=7.0`);
+            let remoteRefs: string[] = [];
+            if (listRefRespose && listRefRespose.value && listRefRespose.value.length > 0) {
+                listRefRespose.forEach((ref: { name: string; }) => {
+                    if (ref.name.startsWith('refs/heads/'))
+                        remoteRefs.push(ref.name.substring('refs/heads/'.length));
+                    if (ref.name.startsWith('refs/tags/'))
+                        remoteRefs.push(ref.name.substring('refs/tags/'.length));
+                });
+            }
+            return remoteRefs;
         }
     }
 }
