@@ -4,6 +4,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 
 ## [0.0.4]
 
+- Better code when retrieving configurations
 - respect settings `hideWorkItemsWithState` and `showWorkItemTypes` in quick pick view #13
 
 ## [0.0.3]
