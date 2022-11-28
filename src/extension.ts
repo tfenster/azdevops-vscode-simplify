@@ -3,6 +3,8 @@ import { getAllWorkItemsAsQuickpicks, WorkItemTreeItem } from './api/azdevops-ap
 import { getAzureDevOpsConnection, getGitExtension } from './helpers';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
 
+let tenantStatusBarItem: vscode.StatusBarItem;
+
 export async function activate(context: vscode.ExtensionContext) {
 
 	const azureAccountExtensionApi = getAzureDevOpsConnection().getAzureAccountExtensionApi();
@@ -26,9 +28,34 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItemTreeItem) => {
 		wi.createBranch();
 	}));
+	tenantStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+	tenantStatusBarItem.command = 'azure-account.selectTenant';
+	context.subscriptions.push(tenantStatusBarItem);
+	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onSessionsChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onStatusChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onSubscriptionsChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onFiltersChanged(updateTenantStatusBarItem));
 }
 
 export function deactivate() { }
+
+async function updateTenantStatusBarItem() {
+	let api = getAzureDevOpsConnection().getAzureAccountExtensionApi();
+	let sessions = api.sessions;
+	const tenants: TenantIdDescription[] = await ((api as any).loginHelper.tenantsTask);
+	if (sessions && sessions.length > 0) {
+		let matchingTenant = tenants.find(t => t.tenantId === sessions[0].tenantId);
+		if (matchingTenant) {
+		 	tenantStatusBarItem.text = `Azure tenant: ${matchingTenant?.displayName}`;
+			tenantStatusBarItem.show();
+		} else {
+			tenantStatusBarItem.text = `Azure tenant: ${sessions[0].tenantId}`;
+			tenantStatusBarItem.show();
+		}
+	} else {
+		tenantStatusBarItem.hide();
+	}
+}
 
 async function selectWorkItem() {
 	try {
@@ -48,4 +75,9 @@ async function selectWorkItem() {
 		console.error(error);
 		return [];
 	}
+}
+
+export interface TenantIdDescription {
+	tenantId: string;
+	displayName: string;
 }
