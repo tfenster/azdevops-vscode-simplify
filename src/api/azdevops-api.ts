@@ -11,9 +11,9 @@ const workItemTypesOfProjects: Map<string, IWorkItemType[]> = new Map();
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
         const repo = await getGitExtension().getRepo();
-        let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined
+        let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined;
         if (repo) {
-            repoAnalysis = analyzeGitRepo(repo)
+            repoAnalysis = analyzeGitRepo(repo);
         }
 
         let connection = getAzureDevOpsConnection();
@@ -28,9 +28,10 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
         }
         let orgs = new Array<OrganizationTreeItem>();
         await responseAccounts.value.forEach((account: any) => {
-            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed
-            if (account.accountName === repoAnalysis?.orgName)
-                collapsibleState = vscode.TreeItemCollapsibleState.Expanded
+            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            if (account.accountName === repoAnalysis?.orgName) {
+                collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            }
             orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
         });
         orgs.sort((a, b) => a.label.localeCompare(b.label));
@@ -44,9 +45,9 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
 
 export async function getProjects(organization: OrganizationTreeItem): Promise<ProjectTreeItem[]> {
     const repo = await getGitExtension().getRepo();
-    let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined
+    let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined;
     if (repo) {
-        repoAnalysis = analyzeGitRepo(repo)
+        repoAnalysis = analyzeGitRepo(repo);
     }
     try {
         let connection = getAzureDevOpsConnection();
@@ -57,9 +58,10 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         }
         let projects = new Array<ProjectTreeItem>();
         await responseProjects.value.forEach((project: any) => {
-            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed
-            if (project.name === repoAnalysis?.projectNameOrId)
-                collapsibleState = vscode.TreeItemCollapsibleState.Expanded
+            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            if (project.name === repoAnalysis?.projectNameOrId) {
+                collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            }
             projects.push(new ProjectTreeItem(project.name, `${organization.url}/${project.id}`, project.id, organization,
                 collapsibleState));
         });
@@ -371,16 +373,17 @@ function analyzeGitRepo(repo: Repository): { orgName: string, projectNameOrId: s
         }
         if (pathSegments && pathSegments.length > 1) {
             const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
-            const orgName = decodeURI(pathSegments[0])
+            const orgName = decodeURI(pathSegments[0]);
             const projectUrl = `${orgUrl}/${pathSegments[1]}`;
             const projectNameOrId = decodeURI(pathSegments[1]);
-            return { orgName, projectNameOrId, orgUrl, projectUrl }
-        } else
-            vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`)
+            return { orgName, projectNameOrId, orgUrl, projectUrl };
+        } else {
+            vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`);
+        }
     } else {
-        console.log(repo)
-        console.log(repo.state.remotes)
-        console.log(repo.state.remotes[0])
+        console.log(repo);
+        console.log(repo.state.remotes);
+        console.log(repo.state.remotes[0]);
         vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
     }
     return undefined;
