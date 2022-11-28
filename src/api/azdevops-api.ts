@@ -11,8 +11,9 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
-        if (memberId === undefined)
-            return []
+        if (memberId === undefined) {
+            return [];
+        }
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/account/accounts/list?view=azure-devops-rest-7.1&tabs=HTTP
         let responseAccounts = await connection.get(`https://app.vssps.visualstudio.com/_apis/accounts?memberId=${memberId}&api-version=6.0-preview.1`);
         if (responseAccounts === undefined) {
@@ -117,17 +118,18 @@ async function getWorkItemTypesOfProcess(orgUrl: string, processTypeId: string):
 }
 
 async function getRelevantWorkItemTypesOfProject(projectUrl: string): Promise<IWorkItemType[]> {
-    if (workItemTypesOfProjects.has(projectUrl))
-        return workItemTypesOfProjects.get(projectUrl)!
+    if (workItemTypesOfProjects.has(projectUrl)) {
+        return workItemTypesOfProjects.get(projectUrl)!;
+    }
 
-    const orgUrl = analyzeProjectUrl(projectUrl).orgUrl
+    const orgUrl = analyzeProjectUrl(projectUrl).orgUrl;
 
     let defaultWorkItemTypeToIconMapping: IWorkItemType[] = [
         { name: 'User Story', devOpsIcon: 'icon_book' },
         { name: 'Bug', devOpsIcon: 'icon_insect' },
         { name: 'Task', devOpsIcon: 'icon_clipboard' }
-    ]
-    let workItemTypesOfProject: IWorkItemType[]
+    ];
+    let workItemTypesOfProject: IWorkItemType[];
     const settingShowWorkItemTypes: string[] = showWorkItemTypes();
     try {
         const devOpsProcess: { typeId: string; } | undefined = await getDevOpsProcessOfProject(projectUrl);
@@ -139,13 +141,14 @@ async function getRelevantWorkItemTypesOfProject(projectUrl: string): Promise<IW
             workItemTypesOfProject = await getRelevantWorkItemsBasedOnDevOps(customWorkItemTypesSetUpInDevOps, orgUrl, devOpsProcess.typeId);
         }
     } catch {
-        if (settingShowWorkItemTypes.length > 0)
+        if (settingShowWorkItemTypes.length > 0) {
             workItemTypesOfProject = enrichWorkItemTypeNamesWithIcons(settingShowWorkItemTypes, defaultWorkItemTypeToIconMapping);
-        else
+        } else {
             workItemTypesOfProject = defaultWorkItemTypeToIconMapping;
+        }
     }
-    workItemTypesOfProjects.set(projectUrl, workItemTypesOfProject)
-    return workItemTypesOfProject
+    workItemTypesOfProjects.set(projectUrl, workItemTypesOfProject);
+    return workItemTypesOfProject;
 
     function enrichWorkItemTypeNamesWithIcons(settingShowWorkItemTypeNames: string[], workItemTypes: IWorkItemType[]): IWorkItemType[] {
         const returnWorkItemTypes: IWorkItemType[] = [];
@@ -157,7 +160,7 @@ async function getRelevantWorkItemTypesOfProject(projectUrl: string): Promise<IW
                 returnWorkItemTypes.push({
                     name: settingShowWorkItemTypeName,
                     devOpsIcon: 'icon_github_issue'
-                })
+                });
             }
         }
         return returnWorkItemTypes;
@@ -188,8 +191,9 @@ async function checkIsRelevantWorkItemTypeOfProject(connection: AzDevOpsConnecti
     if (workItemType.referenceName) {
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types-behaviors/list?view=azure-devops-rest-7.1&tabs=HTTP
         const workItemTypeBehaviors = await connection.get(`${orgUrl}/_apis/work/processes/${devOpsProcessTypeId}/workitemtypesbehaviors/${workItemType.referenceName}/behaviors?api-version=7.1-preview.1`);
-        if (workItemTypeBehaviors && workItemTypeBehaviors.value)
+        if (workItemTypeBehaviors && workItemTypeBehaviors.value) {
             isRelevant = workItemTypeBehaviors.value.some((entry: any) => entry.behavior && ['System.TaskBacklogBehavior', 'System.RequirementBacklogBehavior'].includes(entry.behavior.id));
+        }
     }
     return { workItemType, isRelevant };
 }
@@ -229,7 +233,7 @@ async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: st
     const workItems: IWorkItem[] = await loadWorkItems(query, orgUrl, projectUrl, considerMaxNumberOfWorkItems);
     const workItemTypes = await getWorkItemTypesOfProject(projectUrl);
     for (const workItem of workItems) {
-        const workItemType = workItemTypes.find(entry => entry.name === workItem.fields["System.WorkItemType"])!
+        const workItemType = workItemTypes.find(entry => entry.name === workItem.fields["System.WorkItemType"])!;
         workItem.themeIcon = mapDevOpsWorkItemTypeToThemeIcon(workItemType.devOpsIcon);
     }
     return workItems;
@@ -242,7 +246,7 @@ async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: st
             // https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1&tabs=HTTP
             let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0${maxNumberOfWorkItemsParam}`, { "query": query });
             if (responseWIIds === undefined) {
-                return []
+                return [];
             }
             let wiIds: number[] = responseWIIds.workItems?.map((wi: any) => <Number>wi.id);
 
@@ -258,13 +262,13 @@ async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: st
                 let workItems: IWorkItem[] = [];
                 for (const resolvedWorkItemBlock of resolvedWorkItemBlocks) { workItems = workItems.concat(resolvedWorkItemBlock); };
                 workItems.sort(sortWorkItems);
-                return workItems
+                return workItems;
             }
         } catch (error) {
             vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
             console.error(error);
         }
-        return []
+        return [];
 
         async function loadWorkItemPart(wiIds: number[], connection: AzDevOpsConnection, orgUrl: string): Promise<IWorkItem[]> {
             let bodyWIDetails = {
@@ -282,11 +286,11 @@ async function loadWorkItemObjects(query: string, orgUrl: string, projectUrl: st
 }
 
 function analyzeProjectUrl(projectUrl: string): { orgUrl: string, orgName: string, projectNameOrId: string } {
-    const urlParts = projectUrl.split('/')
-    const projectNameOrId = decodeURI(urlParts.pop()!)
-    const orgName = urlParts[urlParts.length - 1]
+    const urlParts = projectUrl.split('/');
+    const projectNameOrId = decodeURI(urlParts.pop()!);
+    const orgName = urlParts[urlParts.length - 1];
     const orgUrl = urlParts.join('/');
-    return { orgUrl, orgName, projectNameOrId }
+    return { orgUrl, orgName, projectNameOrId };
 }
 
 function sortWorkItems(a: any, b: any): number {
@@ -340,15 +344,17 @@ export async function getQueries(project: ProjectTreeItem): Promise<QueryTreeIte
 }
 async function createQueryString(additionalFilter: string | undefined, projectUrl: string): Promise<string> {
     const relevantWorkItemTypes = await getRelevantWorkItemTypesOfProject(projectUrl);
-    const filterWorkItemTypes = `${relevantWorkItemTypes.map((workItemType) => `'${workItemType.name}'`).join(',')}`
+    const filterWorkItemTypes = `${relevantWorkItemTypes.map((workItemType) => `'${workItemType.name}'`).join(',')}`;
 
-    let query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN (${filterWorkItemTypes})`
-    for (const closedState of hideWorkItemsWithState())
+    let query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN (${filterWorkItemTypes})`;
+    for (const closedState of hideWorkItemsWithState()) {
         query += ` AND [System.State] <> '${closedState}'`;
-    if (additionalFilter)
-        query += ` AND ${additionalFilter}`
+    }
+    if (additionalFilter) {
+        query += ` AND ${additionalFilter}`;
+    }
     query += " ORDER BY [System.ChangedDate] DESC";
-    return query
+    return query;
 }
 
 export class OrganizationTreeItem extends vscode.TreeItem {
@@ -440,7 +446,7 @@ export class WorkItemTreeItem extends vscode.TreeItem {
         const repo = getGitExtension().getRepo();
         if (repo) {
             let remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url);
-            const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!)
+            const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!);
             const existingRefs = remoteRefs.concat(localRefs);
             const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
             let newBranch = await vscode.window.showInputBox({
@@ -448,10 +454,10 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                 value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`,
                 validateInput: (value: string) => {
                     const existingref = existingRefs.find(refName => refName.toLowerCase() === value.toLowerCase());
-                    if (existingref !== undefined) {
-                        return `Branch ${existingref} already exists. Please choose another one`
+                    if (existingref) {
+                        return `Branch ${existingref} already exists. Please choose another one`;
                     }
-                    return undefined
+                    return undefined;
                 }
             });
             if (newBranch) {
@@ -501,10 +507,12 @@ export class WorkItemTreeItem extends vscode.TreeItem {
             let remoteRefs: string[] = [];
             if (listRefRespose && listRefRespose.value && listRefRespose.value.length > 0) {
                 listRefRespose.forEach((ref: { name: string; }) => {
-                    if (ref.name.startsWith('refs/heads/'))
+                    if (ref.name.startsWith('refs/heads/')) {
                         remoteRefs.push(ref.name.substring('refs/heads/'.length));
-                    if (ref.name.startsWith('refs/tags/'))
+                    }
+                    if (ref.name.startsWith('refs/tags/')) {
                         remoteRefs.push(ref.name.substring('refs/tags/'.length));
+                    }
                 });
             }
             return remoteRefs;
