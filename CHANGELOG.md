@@ -4,6 +4,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 
 ## [0.0.4]
 
+- Show the currently used tenant and allow to easily switch it as requested in #6
 - Respect the `Git: Branch prefix` setting if defined, as proposed in #7
 - Introduce a configuration setting `azdevops-vscode-simplify.useWorkitemIdInBranchName` to trigger the inclusion of the work item id in the proposed branch name, as proposed in #8
 - Better code when retrieving configurations
