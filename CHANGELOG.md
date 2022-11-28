@@ -5,6 +5,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 ## [0.0.4]
 
 - Show the currently used tenant and allow to easily switch it as requested in #6
+- Better code when retrieving configurations
 
 ## [0.0.3]
 
