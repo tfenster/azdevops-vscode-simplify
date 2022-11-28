@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getAllWorkItemsAsQuickpicks, WorkItem } from './api/azdevops-api';
+import { getAllWorkItemsAsQuickpicks, WorkItemTreeItem } from './api/azdevops-api';
 import { getAzureDevOpsConnection, getGitExtension } from './helpers';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
 
@@ -14,16 +14,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerTreeDataProvider('workitems', azDevOpsProvider);
 
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.refreshEntries', () => azDevOpsProvider.refresh()));
-	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.openWorkItem', (wi: WorkItem) => {
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.openWorkItem', (wi: WorkItemTreeItem) => {
 		vscode.env.openExternal(vscode.Uri.parse(wi.url));
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', async (wi: WorkItem) => {
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.addToCommitMessage', async (wi: WorkItemTreeItem) => {
 		getGitExtension().appendToCheckinMessage(`#${wi.wiId}`);
 	}));
 	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.selectWorkItem', async () => {
 		await selectWorkItem();
 	}));
-	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItem) => {
+	context.subscriptions.push(vscode.commands.registerCommand('azdevops-vscode-simplify.createBranch', (wi: WorkItemTreeItem) => {
 		wi.createBranch();
 	}));
 }

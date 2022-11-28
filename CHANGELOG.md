@@ -7,6 +7,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 - Respect the `Git: Branch prefix` setting if defined, as proposed in #7
 - Introduce a configuration setting `azdevops-vscode-simplify.useWorkitemIdInBranchName` to trigger the inclusion of the work item id in the proposed branch name, as proposed in #8
 - Better code when retrieving configurations
+- respect settings `hideWorkItemsWithState` and `showWorkItemTypes` in quick pick view #13
 
 ## [0.0.3]
 
