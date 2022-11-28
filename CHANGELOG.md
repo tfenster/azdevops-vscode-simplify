@@ -1,6 +1,9 @@
 # Change Log
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
+## [0.0.4]
+
+- Expand the Azure DevOps project that you're currently working in after initial loading directly #2
 
 ## [0.0.3]
 
