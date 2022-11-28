@@ -31,7 +31,7 @@ export class GitExtension {
     }
 
     private async withSourceControlInputBox(fn: (input: InputBox) => void) {
-        const repo = this.getRepo();
+        const repo = await this.getRepo();
         if (repo) {
             const inputBox = repo.inputBox;
             if (inputBox) {
@@ -41,7 +41,9 @@ export class GitExtension {
     }
 
 
-    public getRepo(): Repository | undefined {
+    public async getRepo(): Promise<Repository | undefined> {
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+        while(GitExtension.gitApi.state === 'uninitialized'){ await sleep(100)}
         const repos = GitExtension.gitApi.repositories;
         if (repos && repos.length > 0) {
             return repos[0];

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
 import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
+import { Repository } from '../types/git';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
@@ -8,6 +9,12 @@ const workItemTypesOfProjects: Map<string, IWorkItemType[]> = new Map();
 
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
+        const repo = await getGitExtension().getRepo();
+        let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined
+        if (repo) {
+            repoAnalysis = analyzeGitRepo(repo)
+        }
+
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
         if (memberId === undefined)
@@ -19,8 +26,10 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
         }
         let orgs = new Array<OrganizationTreeItem>();
         await responseAccounts.value.forEach((account: any) => {
-            orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`,
-                account.accountId, vscode.TreeItemCollapsibleState.Collapsed));
+            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed
+            if (account.accountName === repoAnalysis?.orgName)
+                collapsibleState = vscode.TreeItemCollapsibleState.Expanded
+            orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
         });
         orgs.sort((a, b) => a.label.localeCompare(b.label));
         return orgs;
@@ -32,6 +41,11 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
 }
 
 export async function getProjects(organization: OrganizationTreeItem): Promise<ProjectTreeItem[]> {
+    const repo = await getGitExtension().getRepo();
+    let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined
+    if (repo) {
+        repoAnalysis = analyzeGitRepo(repo)
+    }
     try {
         let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
@@ -41,8 +55,11 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         }
         let projects = new Array<ProjectTreeItem>();
         await responseProjects.value.forEach((project: any) => {
+            let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed
+            if (project.name === repoAnalysis?.projectNameOrId)
+                collapsibleState = vscode.TreeItemCollapsibleState.Expanded
             projects.push(new ProjectTreeItem(project.name, `${organization.url}/${project.id}`, project.id, organization,
-                vscode.TreeItemCollapsibleState.Collapsed));
+                collapsibleState));
         });
         projects.sort((a, b) => a.label.localeCompare(b.label));
         return projects;
@@ -54,37 +71,20 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
 }
 
 export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickItem[] | undefined> {
-    const repo = getGitExtension().getRepo();
+    const repo = await getGitExtension().getRepo();
     if (repo) {
-        if (repo.state.remotes[0].fetchUrl) {
-            let remoteRepoName = repo.state.remotes[0].fetchUrl;
-            let pathSegments: string[] | undefined;
-            if (remoteRepoName.startsWith("git@")) {
-                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
-                pathSegments = remoteRepoName.split("/");
-            }
-            else if (remoteRepoName.startsWith('https://')) {
-                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
-                pathSegments = remoteRepoName.split("/");
-            }
-            if (pathSegments && pathSegments.length > 1) {
-                const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
-                const projectUrl = `${orgUrl}/${pathSegments[1]}`;
-                const query = await createQueryString("", projectUrl);
-                const workItems = await loadWorkItemObjects(query, orgUrl, projectUrl, false);
-                const wiDetails: vscode.QuickPickItem[] = workItems.map((wi: IWorkItem) => {
-                    return {
-                        label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
-                        description: `${wi.id}`,
-                        detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}`
-                    };
-                });
-                return wiDetails;
-            } else {
-                vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`);
-            }
-        } else {
-            vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
+        const repoAnalysis = analyzeGitRepo(repo);
+        if (repoAnalysis) {
+            const query = await createQueryString("", repoAnalysis.projectUrl);
+            const workItems = await loadWorkItemObjects(query, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
+            const wiDetails: vscode.QuickPickItem[] = workItems.map((wi: IWorkItem) => {
+                return {
+                    label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
+                    description: `${wi.id}`,
+                    detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}`
+                };
+            });
+            return wiDetails;
         }
     }
 }
@@ -350,6 +350,35 @@ async function createQueryString(additionalFilter: string | undefined, projectUr
     return query
 }
 
+function analyzeGitRepo(repo: Repository): { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined {
+    if (repo.state.remotes[0].fetchUrl) {
+        let remoteRepoName = repo.state.remotes[0].fetchUrl;
+        let pathSegments: string[] | undefined;
+        if (remoteRepoName.startsWith("git@")) {
+            remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
+            pathSegments = remoteRepoName.split("/");
+        }
+        else if (remoteRepoName.startsWith('https://')) {
+            remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
+            pathSegments = remoteRepoName.split("/");
+        }
+        if (pathSegments && pathSegments.length > 1) {
+            const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
+            const orgName = decodeURI(pathSegments[0])
+            const projectUrl = `${orgUrl}/${pathSegments[1]}`;
+            const projectNameOrId = decodeURI(pathSegments[1]);
+            return { orgName, projectNameOrId, orgUrl, projectUrl }
+        } else
+            vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`)
+    } else {
+        console.log(repo)
+        console.log(repo.state.remotes)
+        console.log(repo.state.remotes[0])
+        vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
+    }
+    return undefined;
+}
+
 export class OrganizationTreeItem extends vscode.TreeItem {
 
     constructor(
@@ -436,7 +465,7 @@ export class WorkItemTreeItem extends vscode.TreeItem {
     contextValue = 'workitem';
 
     public async createBranch() {
-        const repo = getGitExtension().getRepo();
+        const repo = await getGitExtension().getRepo();
         if (repo) {
             const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
             let newBranch = await vscode.window.showInputBox({
