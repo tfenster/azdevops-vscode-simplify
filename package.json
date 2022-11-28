@@ -164,6 +164,11 @@
             "type": "number",
             "default": 25,
             "description": "Maximum number of work items to show per query"
+          },
+          "azdevops-vscode-simplify.useWorkitemIdInBranchName": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the work item id in the branch name proposal when you create a new branch"
           }
         }
       }
