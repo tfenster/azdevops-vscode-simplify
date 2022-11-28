@@ -18,18 +18,12 @@ export function showWorkItemTypes(): string[] {
 }
 
 export function hideWorkItemsWithState(): string[] {
-    let def: string[] | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('hideWorkItemsWithState');
-    if (def === undefined) { def = []; }
-    return def;
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('hideWorkItemsWithState', []);
 }
 export function sortOrderOfWorkItemState(): string[] {
-    let def: string[] | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('sortOrderOfWorkItemState');
-    if (def === undefined) { def = []; }
-    return def;
+   return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('sortOrderOfWorkItemState', []);
 }
 
 export function maxNumberOfWorkItems(): Number {
-    let def: Number | undefined = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('maxNumberOfWorkItems');
-    if (def === undefined) { def = 25; }
-    return def;
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('maxNumberOfWorkItems', 25);
 }
