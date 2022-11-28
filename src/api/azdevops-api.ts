@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState } from '../helpers';
+import { getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
@@ -438,8 +438,10 @@ export class WorkItemTreeItem extends vscode.TreeItem {
     public async createBranch() {
         const repo = getGitExtension().getRepo();
         if (repo) {
+            const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
             let newBranch = await vscode.window.showInputBox({
-                prompt: "Please enter the name of the new branch"
+                prompt: "Please enter the name of the new branch",
+                value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`
             });
             if (newBranch) {
                 if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
