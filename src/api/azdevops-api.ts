@@ -10,8 +10,8 @@ const workItemTypesOfProjects: Map<string, IWorkItemType[]> = new Map();
 
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
-        const repo = await getGitExtension().getRepo();
-        let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined;
+        const repo = await getGitExtension().getRepo(false);
+        let repoAnalysis: RepoAnalysis | undefined;
         if (repo) {
             repoAnalysis = analyzeGitRepo(repo);
         }
@@ -44,8 +44,8 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
 }
 
 export async function getProjects(organization: OrganizationTreeItem): Promise<ProjectTreeItem[]> {
-    const repo = await getGitExtension().getRepo();
-    let repoAnalysis: { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined;
+    const repo = await getGitExtension().getRepo(false);
+    let repoAnalysis: RepoAnalysis | undefined;
     if (repo) {
         repoAnalysis = analyzeGitRepo(repo);
     }
@@ -359,7 +359,7 @@ async function createQueryString(additionalFilter: string | undefined, projectUr
     return query;
 }
 
-function analyzeGitRepo(repo: Repository): { orgName: string, projectNameOrId: string, orgUrl: string, projectUrl: string } | undefined {
+function analyzeGitRepo(repo: Repository): RepoAnalysis | undefined {
     if (repo.state.remotes[0].fetchUrl) {
         let remoteRepoName = repo.state.remotes[0].fetchUrl;
         let pathSegments: string[] | undefined;
@@ -376,7 +376,9 @@ function analyzeGitRepo(repo: Repository): { orgName: string, projectNameOrId: s
             const orgName = decodeURI(pathSegments[0]);
             const projectUrl = `${orgUrl}/${pathSegments[1]}`;
             const projectNameOrId = decodeURI(pathSegments[1]);
-            return { orgName, projectNameOrId, orgUrl, projectUrl };
+            const repoUrl = `${orgUrl}/${pathSegments[1]}/_git/${pathSegments[2]}`;
+            const repoNameOrId = decodeURI(pathSegments[2]);
+            return { orgName, projectNameOrId, repoNameOrId, orgUrl, projectUrl, repoUrl };
         } else {
             vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`);
         }
@@ -387,6 +389,15 @@ function analyzeGitRepo(repo: Repository): { orgName: string, projectNameOrId: s
         vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
     }
     return undefined;
+}
+
+export interface RepoAnalysis {
+    orgName: string,
+    projectNameOrId: string,
+    repoNameOrId: string,
+    orgUrl: string,
+    projectUrl: string,
+    repoUrl: string
 }
 
 export class OrganizationTreeItem extends vscode.TreeItem {
@@ -477,68 +488,71 @@ export class WorkItemTreeItem extends vscode.TreeItem {
     public async createBranch() {
         const repo = await getGitExtension().getRepo();
         if (repo) {
-            let remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url);
-            const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!);
-            const existingRefs = remoteRefs.concat(localRefs);
-            const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
-            let newBranch = await vscode.window.showInputBox({
-                prompt: "Please enter the name of the new branch",
-                value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`,
-                validateInput: (value: string) => {
-                    const existingref = existingRefs.find(refName => refName.toLowerCase() === value.toLowerCase());
-                    if (existingref) {
-                        return `Branch ${existingref} already exists. Please choose another one`;
-                    }
-                    return undefined;
-                }
-            });
-            if (newBranch) {
-                if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
-                    // get substring after last slash
-                    let remoteRepoName = repo.state.remotes[0].fetchUrl;
-                    remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
-                    try {
-                        let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
-                        if (remoteRepo === undefined) {
-                            return;
+            let repoAnalysis = analyzeGitRepo(repo);
+            if (repoAnalysis) {
+                let remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url, repoAnalysis.repoNameOrId);
+                const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!);
+                const existingRefs = remoteRefs.concat(localRefs);
+                const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
+                let newBranch = await vscode.window.showInputBox({
+                    prompt: "Please enter the name of the new branch",
+                    value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`,
+                    validateInput: (value: string) => {
+                        const existingref = existingRefs.find(refName => refName.toLowerCase() === value.toLowerCase());
+                        if (existingref) {
+                            return `Branch ${existingref} already exists. Please choose another one`;
                         }
-                        let upstreamRef = repo.state.HEAD.upstream;
-                        await repo.createBranch(newBranch, true);
-                        await repo.push(upstreamRef.remote, newBranch, true);
-                        let wiLink = {
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "Op": 0,
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "Path": "/relations/-",
-                            // eslint-disable-next-line @typescript-eslint/naming-convention
-                            "Value": {
-                                // eslint-disable-next-line @typescript-eslint/naming-convention
-                                "rel": "ArtifactLink",
-                                // eslint-disable-next-line @typescript-eslint/naming-convention
-                                "url": `vstfs:///Git/Ref/${this.parent.parent.id}%2F${remoteRepo.id}%2FGB${newBranch}`,
-                                // eslint-disable-next-line @typescript-eslint/naming-convention
-                                "attributes": {
-                                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                                    "name": "Branch"
-                                }
-                            }
-                        };
-                        await getAzureDevOpsConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
-                        vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
-                    } catch (error) {
-                        vscode.window.showErrorMessage(`Failed to create branch ${newBranch} and/or link it to work item ${this.wiId}`);
+                        return undefined;
                     }
-                } else {
-                    vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
+                });
+                if (newBranch) {
+                    if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
+                        // get substring after last slash
+                        let remoteRepoName = repo.state.remotes[0].fetchUrl;
+                        remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
+                        try {
+                            let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
+                            if (remoteRepo === undefined) {
+                                return;
+                            }
+                            let upstreamRef = repo.state.HEAD.upstream;
+                            await repo.createBranch(newBranch, true);
+                            await repo.push(upstreamRef.remote, newBranch, true);
+                            let wiLink = {
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "Op": 0,
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "Path": "/relations/-",
+                                // eslint-disable-next-line @typescript-eslint/naming-convention
+                                "Value": {
+                                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                                    "rel": "ArtifactLink",
+                                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                                    "url": `vstfs:///Git/Ref/${this.parent.parent.id}%2F${remoteRepo.id}%2FGB${newBranch}`,
+                                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                                    "attributes": {
+                                        // eslint-disable-next-line @typescript-eslint/naming-convention
+                                        "name": "Branch"
+                                    }
+                                }
+                            };
+                            await getAzureDevOpsConnection().patch(`${this.parent.parent.parent.url}/_apis/wit/workItems/${this.wiId}?api-version=4.0-preview`, [wiLink], "application/json-patch+json");
+                            vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
+                        } catch (error) {
+                            vscode.window.showErrorMessage(`Failed to create branch ${newBranch} and/or link it to work item ${this.wiId}`);
+                        }
+                    } else {
+                        vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
+                    }
                 }
             }
         }
 
-        async function getRemoteRefs(projectUrl: string) {
-            const listRefRespose = await getAzureDevOpsConnection().get(`${projectUrl}/_apis/git/repositories/System/refs?api-version=7.0`);
+        async function getRemoteRefs(projectUrl: string, repo: string) {
+            const listRefResponse = await getAzureDevOpsConnection().get(`${projectUrl}/_apis/git/repositories/${repo}/refs?api-version=7.0`);
             let remoteRefs: string[] = [];
-            if (listRefRespose && listRefRespose.value && listRefRespose.value.length > 0) {
-                listRefRespose.forEach((ref: { name: string; }) => {
+            if (listRefResponse && listRefResponse.value && listRefResponse.value.length > 0) {
+                listRefResponse.value.forEach((ref: { name: string; }) => {
                     if (ref.name.startsWith('refs/heads/')) {
                         remoteRefs.push(ref.name.substring('refs/heads/'.length));
                     }
