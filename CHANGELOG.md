@@ -2,6 +2,11 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.5]
+
+- Fix startup error if you open a folder or workspace that isn't a git repo #21
+- Fix problem with hardcoded repo name #22
+
 ## [0.0.4]
 
 - Expand the Azure DevOps project that you're currently working in after initial loading directly #2
