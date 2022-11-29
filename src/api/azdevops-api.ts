@@ -363,21 +363,24 @@ function analyzeGitRepo(repo: Repository): RepoAnalysis | undefined {
     if (repo.state.remotes[0].fetchUrl) {
         let remoteRepoName = repo.state.remotes[0].fetchUrl;
         let pathSegments: string[] | undefined;
-        if (remoteRepoName.startsWith("git@")) {
+        let repoSegmentNo = 0;
+        if (remoteRepoName.startsWith("git@")) {  // e.g. git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
             remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
             pathSegments = remoteRepoName.split("/");
+            repoSegmentNo = 2;
         }
-        else if (remoteRepoName.startsWith('https://')) {
+        else if (remoteRepoName.startsWith('https://')) {  // e.g. https://{org}@dev.azure.com/{org}/{project}/_git/{repo}
             remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
             pathSegments = remoteRepoName.split("/");
+            repoSegmentNo = 3;
         }
         if (pathSegments && pathSegments.length > 1) {
             const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
             const orgName = decodeURI(pathSegments[0]);
             const projectUrl = `${orgUrl}/${pathSegments[1]}`;
             const projectNameOrId = decodeURI(pathSegments[1]);
-            const repoUrl = `${orgUrl}/${pathSegments[1]}/_git/${pathSegments[2]}`;
-            const repoNameOrId = decodeURI(pathSegments[2]);
+            const repoUrl = `${orgUrl}/${pathSegments[1]}/_git/${pathSegments[repoSegmentNo]}`;
+            const repoNameOrId = decodeURI(pathSegments[repoSegmentNo]);
             return { orgName, projectNameOrId, repoNameOrId, orgUrl, projectUrl, repoUrl };
         } else {
             vscode.window.showErrorMessage(`Couldn't identify the Azure DevOps organization and project from the remote repository fetchUrl <${remoteRepoName}>.`);

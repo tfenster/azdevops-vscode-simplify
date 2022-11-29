@@ -2,6 +2,10 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.6]
+
+- Fix problem where creating a branch didn't work for https-based remotes #24
+
 ## [0.0.5]
 
 - Fix startup error if you open a folder or workspace that isn't a git repo #21
