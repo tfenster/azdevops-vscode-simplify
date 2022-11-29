@@ -41,14 +41,16 @@ export class GitExtension {
     }
 
 
-    public async getRepo(): Promise<Repository | undefined> {
+    public async getRepo(showWarningIfFailed: boolean = true): Promise<Repository | undefined> {
         const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-        while(GitExtension.gitApi.state === 'uninitialized'){ await sleep(100)}
+        while (GitExtension.gitApi.state === 'uninitialized') { await sleep(100); }
         const repos = GitExtension.gitApi.repositories;
         if (repos && repos.length > 0) {
             return repos[0];
         } else {
-            vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
+            if (showWarningIfFailed) {
+                vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
+            }
         }
         return undefined;
     }
