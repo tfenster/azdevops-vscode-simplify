@@ -2,7 +2,7 @@
   "name": "azdevops-vscode-simplify",
   "displayName": "Azure DevOps Simplify",
   "description": "An Extension to make working with Azure DevOps in VS Code more efficient",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "tfenster",
   "author": {
     "name": "David Feldhoff",

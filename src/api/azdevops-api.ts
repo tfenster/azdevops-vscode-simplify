@@ -389,7 +389,7 @@ function analyzeGitRepo(repo: Repository): RepoAnalysis | undefined {
         console.log(repo);
         console.log(repo.state.remotes);
         console.log(repo.state.remotes[0]);
-        vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only with repositories with remote fetchUrls.");
+        vscode.window.showErrorMessage("No remote with fetchUrl found. This function is only working with repositories with remote fetchUrls.");
     }
     return undefined;
 }
