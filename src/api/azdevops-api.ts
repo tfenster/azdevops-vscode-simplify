@@ -493,7 +493,7 @@ export class WorkItemTreeItem extends vscode.TreeItem {
         if (repo) {
             let repoAnalysis = analyzeGitRepo(repo);
             if (repoAnalysis) {
-                let remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url, repoAnalysis.repoNameOrId);
+                const remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url, repoAnalysis.repoNameOrId);
                 const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!);
                 const existingRefs = remoteRefs.concat(localRefs);
                 const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
@@ -519,7 +519,11 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                                 return;
                             }
                             let upstreamRef = repo.state.HEAD.upstream;
-                            await repo.createBranch(newBranch, true);
+                            const baseBranchName = await askForBaseBranch(upstreamRef.remote, remoteRepo.defaultBranch.substring('refs/heads/'.length), repo.state.HEAD!.name, remoteRefs, localRefs);
+                            if (!baseBranchName) {
+                                return;
+                            }
+                            await repo.createBranch(newBranch, true, baseBranchName);
                             await repo.push(upstreamRef.remote, newBranch, true);
                             let wiLink = {
                                 // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -549,6 +553,38 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                     }
                 }
             }
+        }
+
+        async function askForBaseBranch(nameOfRemote: string, remoteRepoDefaultBranch: string, headName: string | undefined, remoteRefs: string[], localRefs: string[]) {
+            interface BranchQuickPick { label: string; description: string; branchName: string; prio: number; };
+            let quickPickItems: BranchQuickPick[] = [];
+            remoteRefs.forEach(entry => {
+                const originDefaultBranch = `${nameOfRemote}/${remoteRepoDefaultBranch}`;
+                const currentBranchName = `${nameOfRemote}/${entry}`;
+                const suffix = currentBranchName === originDefaultBranch ? ` (${nameOfRemote} default)` : '';
+                quickPickItems.push({
+                    label: currentBranchName,
+                    description: suffix,
+                    branchName: currentBranchName,
+                    prio: currentBranchName === originDefaultBranch ? 9 : 0
+                });
+            });
+            localRefs.forEach(entry => {
+                const isLocalDefault = entry === remoteRepoDefaultBranch;
+                const isCurrent = entry === headName;
+                let suffix = isLocalDefault ? ' (default)' : '';
+                suffix += isCurrent ? ' (current)' : '';
+                quickPickItems.push({
+                    label: entry,
+                    description: suffix,
+                    branchName: entry,
+                    prio: isCurrent ? 10 : isLocalDefault ? 8 : 1
+                });
+            });
+            quickPickItems = quickPickItems.sort((a, b) => b.prio - a.prio === 0 ? a.branchName.localeCompare(b.branchName) : b.prio - a.prio);
+            const baseBranch: BranchQuickPick | undefined = await vscode.window.showQuickPick(quickPickItems, { title: 'Please select the base branch' });
+            const baseBranchName = baseBranch ? baseBranch.branchName : undefined;
+            return baseBranchName;
         }
 
         async function getRemoteRefs(projectUrl: string, repo: string) {

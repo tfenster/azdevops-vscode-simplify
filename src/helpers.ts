@@ -14,11 +14,11 @@ export function getGitExtension(): GitExtension {
 }
 
 export function showWorkItemTypes(): string[] {
-    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showWorkItemTypes', [])
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showWorkItemTypes', []);
 }
 
 export function useWorkitemIdInBranchName(): boolean {
-    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false)
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false);
 }
 
 export function hideWorkItemsWithState(): string[] {

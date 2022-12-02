@@ -2,6 +2,10 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.7]
+
+- Ask for branch to base on when creating a new branch #28
+
 ## [0.0.6]
 
 - Fix problem where creating a branch didn't work for https-based remotes #24

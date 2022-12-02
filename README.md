@@ -14,14 +14,21 @@ The extension gives you a new view which shows all your Azure DevOps organizatio
 
 For all work items, you can add it to the commit message, create a new branch linked to it and open it in the browser.
 
-Please note that only user stories, bugs and tasks are shown. You can also define whether closed work items should be hidden and how many work items per query are shown. See below for more details on the settings.
+Please check the settings below for more details on how you can change the behaviour of this extension like which work item types or how many of them are shown, which branch name is suggested when creating a new branch and further things.
 
 ## Extension Settings
 
 This extension contributes the following settings:
 
-* `azdevops-vscode-simplify.hideClosedWorkItems`: If this is set to true, then all closed work items will be hidden (default: false).
+* `azdevops-vscode-simplify.showWorkItemTypes`: Show all work items with one of the following types. If it's empty, we're trying to figure out the relevant work items on our own based on your Project confiugrations in Azure DevOps.
+* `azdevops-vscode-simplify.hideWorkItemsWithState`: Use this setting to define which work items should be hidden. By default closed and removed ones are not shown.
+* `azdevops-vscode-simplify.sortOrderOfWorkItemState`: Work items are sorted by state, then by name. With this setting you're able to change the order of the states or add your own custom ones.
 * `azdevops-vscode-simplify.maxNumberOfWorkItems`: Use this setting to define the maximum number of work items that are shown below a query (default: 25).
+* `azdevops-vscode-simplify.useWorkitemIdInBranchName`: Use the work item id in the branch name proposal when you create a new branch
+
+Furthermore we use the following settings from other extensions:
+
+* `git.branchPrefix`: When creating a new branch we are asking you for a branch name. This prefix, together with the `useWorkitemIdInBranchName` setting will alredy be suggested as branch name.
 
 ## Known Issues
 
