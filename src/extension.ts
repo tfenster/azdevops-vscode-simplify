@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getAllWorkItemsAsQuickpicks, WorkItemTreeItem } from './api/azdevops-api';
+import { getAllWorkItemsAsQuickpicks, WorkItemQuickPickItems, WorkItemTreeItem } from './api/azdevops-api';
 import { getAzureDevOpsConnection, getGitExtension } from './helpers';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
 
@@ -46,7 +46,7 @@ async function updateTenantStatusBarItem() {
 	if (sessions && sessions.length > 0) {
 		let matchingTenant = tenants.find(t => t.tenantId === sessions[0].tenantId);
 		if (matchingTenant) {
-		 	tenantStatusBarItem.text = `Azure tenant: ${matchingTenant?.displayName}`;
+			tenantStatusBarItem.text = `Azure tenant: ${matchingTenant?.displayName}`;
 			tenantStatusBarItem.show();
 		} else {
 			tenantStatusBarItem.text = `Azure tenant: ${sessions[0].tenantId}`;
@@ -59,16 +59,32 @@ async function updateTenantStatusBarItem() {
 
 async function selectWorkItem() {
 	try {
+		const quickPick = vscode.window.createQuickPick<WorkItemQuickPickItems>();
+		quickPick.busy = true;
+		quickPick.title = 'Search for the title or ID of the work item you want to add to the commit message';
+		quickPick.ignoreFocusOut = true;
+		quickPick.matchOnDescription = true;
+		quickPick.matchOnDetail = true;
+		quickPick.canSelectMany = true;
+		quickPick.show();
 		const workItems = await getAllWorkItemsAsQuickpicks();
 		if (workItems && workItems.length > 0) {
-			const workItem = await vscode.window.showQuickPick(workItems, {
-				title: 'Search for the title or ID of the work item you want to add to the commit message',
-				ignoreFocusOut: true,
-				matchOnDescription: true
+			quickPick.busy = false;
+			quickPick.onDidTriggerItemButton((args) => {
+				if (args.button.tooltip === 'Add parent') {
+					const parentOfItem = quickPick.items.find(entry => entry.workItemId === args.item.parentId);
+					if (parentOfItem) {
+						quickPick.selectedItems = quickPick.selectedItems.concat(parentOfItem);
+					}
+				}
 			});
-			if (workItem) {
-				getGitExtension().appendToCheckinMessage(`#${workItem.description!}`);
-			}
+			quickPick.items = workItems;
+			quickPick.onDidAccept(() => {
+				quickPick.hide();
+				for (const selectedItem of quickPick.selectedItems) {
+					getGitExtension().appendToCheckinMessage(`#${selectedItem.workItemId}`);
+				}
+			});
 		}
 	} catch (error) {
 		vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
