@@ -24,7 +24,9 @@ This extension contributes the following settings:
 * `azdevops-vscode-simplify.hideWorkItemsWithState`: Use this setting to define which work items should be hidden. By default closed and removed ones are not shown.
 * `azdevops-vscode-simplify.sortOrderOfWorkItemState`: Work items are sorted by state, then by name. With this setting you're able to change the order of the states or add your own custom ones.
 * `azdevops-vscode-simplify.maxNumberOfWorkItems`: Use this setting to define the maximum number of work items that are shown below a query (default: 25).
-* `azdevops-vscode-simplify.useWorkitemIdInBranchName`: Use the work item id in the branch name proposal when you create a new branch
+* `azdevops-vscode-simplify.createBranch.useWorkitemIdInBranchName`: Use the work item id in the branch name proposal when you create a new branch
+* `azdevops-vscode-simplify.createBranch.createBranchBasedOn`: Define the base branch when creating a new branch
+* `azdevops-vscode-simplify.createBranch.askForBaseBranch`: If this is selected, the `createBranchBasedOn` setting is just a proposal and you can select another branch as base.
 
 Furthermore we use the following settings from other extensions:
 
