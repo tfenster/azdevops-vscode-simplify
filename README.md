@@ -14,7 +14,7 @@ The extension gives you a new view which shows all your Azure DevOps organizatio
 
 For all work items, you can add it to the commit message, create a new branch linked to it and open it in the browser.
 
-Please check the settings below for more details on how you can change the behaviour of this extension like which work item types or how many of them are shown, which branch name is suggested when creating a new branch and further things.
+Please check the settings below for more details on how you can change the behavior of this extension like which work item types or how many of them are shown, which branch name is suggested when creating a new branch and further things.
 
 ## Extension Settings
 
