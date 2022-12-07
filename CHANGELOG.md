@@ -2,6 +2,11 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.7]
+
+- Add the possibility to show the parents of the Work Items as well using the setting `azdevops-vscode-simplify.showParentsOfWorkItems`. #11
+- Add the possibility to select multiple Work Items when adding them to the commit message and using the command for that.
+
 ## [0.0.6]
 
 - Fix problem where creating a branch didn't work for https-based remotes #24

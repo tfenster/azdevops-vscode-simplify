@@ -73,23 +73,68 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         return [];
     }
 }
-
-export async function getAllWorkItemsAsQuickpicks(): Promise<vscode.QuickPickItem[] | undefined> {
+export interface WorkItemQuickPickItems { label: string; kind?: vscode.QuickPickItemKind; description?: string; detail?: string; picked?: boolean; alwaysShow?: boolean; buttons?: readonly vscode.QuickInputButton[]; workItemId: number; parentId?: number; }
+export async function getAllWorkItemsAsQuickpicks(): Promise<WorkItemQuickPickItems[] | undefined> {
     const repo = await getGitExtension().getRepo();
     if (repo) {
         const repoAnalysis = analyzeGitRepo(repo);
         if (repoAnalysis) {
             const query = await createQueryString("", repoAnalysis.projectUrl);
-            const workItems = await loadWorkItemObjects(query, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
-            const wiDetails: vscode.QuickPickItem[] = workItems.map((wi: IWorkItem) => {
+            let workItems = await loadWorkItemObjects(query, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
+
+            const showParentsOfWorkItems = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showParentsOfWorkItems', false);
+            let parentChildRelationMap: { "parent": number, "child": number }[] = [];
+            if (showParentsOfWorkItems) {
+                parentChildRelationMap = await getParentChildRelationMap(repoAnalysis.projectUrl, workItems.map(wi => +wi.id));
+                const parentWorkItemIdsNotYetLoaded = parentChildRelationMap.filter(mapEntry => !workItems.some(loadedWorkItem => parseInt(loadedWorkItem.id) === mapEntry.parent)).map(entry => entry.parent);
+                if (parentWorkItemIdsNotYetLoaded.length > 0) {
+                    const queryToLoadMissingParents = await createQueryString(`[System.Id] in (${parentWorkItemIdsNotYetLoaded.join(',')})`, repoAnalysis.projectUrl, false);
+                    const parentWorkItems = await loadWorkItemObjects(queryToLoadMissingParents, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
+                    workItems = workItems.concat(parentWorkItems);
+                }
+            }
+
+            const wiDetails: WorkItemQuickPickItems[] = workItems.map((wi: IWorkItem) => {
+                const assignedTo = `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "Unassigned")}`;
+                let detail = assignedTo;
+                let buttons: vscode.QuickInputButton[] = [];
+                const parent = parentChildRelationMap.find(entry => entry.child === +wi.id)?.parent;
+                const childs = parentChildRelationMap.filter(entry => entry.parent === +wi.id).map(entry => entry.child);
+                if (parent) {
+                    detail += `; Child of ${parent}`;
+                    buttons.push({
+                        iconPath: new vscode.ThemeIcon("references"),
+                        tooltip: "Add parent"
+                    });
+                }
+                if (childs.length > 0) { detail += `; Parent of ${childs.join(',')}`; }
+
                 return {
                     label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
                     description: `${wi.id}`,
-                    detail: `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "")}`
+                    detail: detail,
+                    buttons: buttons,
+                    workItemId: +wi.id,
+                    parentId: parent
                 };
             });
             return wiDetails;
         }
+    }
+
+    async function getParentChildRelationMap(projectUrl: string, workItemIds: number[]) {
+        const connection = getAzureDevOpsConnection();
+        const query2 = `select [System.Id] from WorkItemLinks where ([System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward') and (Target.[System.Id] in (${workItemIds.join(',')})) order by [System.Id]`;
+        let responseWIIds = await connection.post(`${projectUrl}/_apis/wit/wiql?api-version=6.0`, { "query": query2 });
+        const parentChildRelationMap: { "parent": number, "child": number }[] = [];
+        if (responseWIIds && responseWIIds.workItemRelations) {
+            responseWIIds.workItemRelations
+                .filter((entry: any) => entry.rel === 'System.LinkTypes.Hierarchy-Forward')
+                .forEach((entry: any) => parentChildRelationMap.push({
+                    "parent": entry.source.id, "child": entry.target.id
+                }));
+        }
+        return parentChildRelationMap;
     }
 }
 
@@ -344,11 +389,15 @@ export async function getQueries(project: ProjectTreeItem): Promise<QueryTreeIte
         new QueryTreeItem("Recently mentioned", `${project.id}-5`, project, await createQueryString("[System.Id] IN (@RecentMentions)", project.url), vscode.TreeItemCollapsibleState.Collapsed),
     ];
 }
-async function createQueryString(additionalFilter: string | undefined, projectUrl: string): Promise<string> {
-    const relevantWorkItemTypes = await getRelevantWorkItemTypesOfProject(projectUrl);
-    const filterWorkItemTypes = `${relevantWorkItemTypes.map((workItemType) => `'${workItemType.name}'`).join(',')}`;
+async function createQueryString(additionalFilter: string | undefined, projectUrl: string, filterOnWorkItemTypes: boolean = true): Promise<string> {
+    let filterWorkItemTypes = "";
+    if (filterOnWorkItemTypes) {
+        const relevantWorkItemTypes = await getRelevantWorkItemTypesOfProject(projectUrl);
+        const workItemTypesToFilter = `${relevantWorkItemTypes.map((workItemType) => `'${workItemType.name}'`).join(',')}`;
+        filterWorkItemTypes = ` AND [System.WorkItemType] IN (${workItemTypesToFilter})`;
+    }
 
-    let query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN (${filterWorkItemTypes})`;
+    let query = `Select [System.Id] From WorkItems WHERE [System.TeamProject] = @project ${filterWorkItemTypes}`;
     for (const closedState of hideWorkItemsWithState()) {
         query += ` AND [System.State] <> '${closedState}'`;
     }
