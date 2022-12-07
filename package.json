@@ -165,6 +165,11 @@
             "default": 25,
             "description": "Maximum number of work items to show per query"
           },
+          "azdevops-vscode-simplify.showParentsOfWorkItems": {
+            "type": "boolean",
+            "default": false,
+            "description": "Show parents of the work items as well. The parent will then be loaded, regardless of the work item type. That means that the setting showWorkItemTypes is not considered when loading the parents."
+          },
           "azdevops-vscode-simplify.useWorkitemIdInBranchName": {
             "type": "boolean",
             "default": false,
@@ -186,7 +191,7 @@
             ],
             "enumDescriptions": [
               "Create the branch based on the currently checked out branch.",
-              "Create the branch based on the default branch of the remote repository, e.g. origin/dev" 
+              "Create the branch based on the default branch of the remote repository, e.g. origin/dev"
             ]
           },
           "azdevops-vscode-simplify.createBranch.askForBaseBranch": {
