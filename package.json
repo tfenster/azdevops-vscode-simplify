@@ -126,6 +126,18 @@
       {
         "title": "Azure DevOps Simplify",
         "properties": {
+          "azdevops-vscode-simplify.organizationAndProjectFilter": {
+            "type": "array",
+            "default": [],
+            "description": "Filter your organizations and projects, so that not everything is shown. You can use a * as wildcard, e.g. My Organization/* or My Organization/* customizations.",
+            "markdownDescription": "Filter your organizations and projects, so that not everything is shown. You can use a * as wildcard, e.g. `My Organization/*` or `My Organization/* customizations`.",
+            "examples": [
+              [
+                "My Organization/*",
+                "My Organization2/* customizations"
+              ]
+            ]
+          },
           "azdevops-vscode-simplify.showWorkItemTypes": {
             "type": "array",
             "default": [],
@@ -174,7 +186,7 @@
             "type": "boolean",
             "default": false,
             "description": "Use the work item id in the branch name proposal when you create a new branch",
-            "markdownDeprecationMessage": "Use this setting instead: `azdevops-vscode-simplify.createBranch.createBranchBasedOn`"
+            "markdownDeprecationMessage": "Use this setting instead: `azdevops-vscode-simplify.createBranch.useWorkitemIdInBranchName`"
           },
           "azdevops-vscode-simplify.createBranch.useWorkitemIdInBranchName": {
             "type": "boolean",

@@ -3,6 +3,7 @@ import { AzDevOpsConnection } from '../connection';
 import { askForBaseBranch, createBranchBasedOn, getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
 import { Ref, RefType } from '../types/git';
 import { Repository } from '../types/git';
+import escapeStringRegexp from 'escape-string-regexp';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
@@ -35,7 +36,20 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
             orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
         });
         orgs.sort((a, b) => a.label.localeCompare(b.label));
-        return orgs;
+
+        const organizationAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
+        if (organizationAndProjectFilters.length === 0) {
+            return orgs;
+        }
+        const validOrgs = [];
+        const organizationFilters = organizationAndProjectFilters.map(entry => entry.split('/').shift()!);
+        const regexSafeOrganizationFilters = organizationFilters.map(orgFilter => escapeStringRegexp(orgFilter).replace(/\\\*/g, '.*?'));
+        for (const org of orgs) {
+            if (regexSafeOrganizationFilters.some(filter => new RegExp(filter).test(org.label))) {
+                validOrgs.push(org);
+            }
+        }
+        return validOrgs;
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving organizations: ${error}`);
         console.error(error);
@@ -66,7 +80,20 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
                 collapsibleState));
         });
         projects.sort((a, b) => a.label.localeCompare(b.label));
-        return projects;
+
+        const organizationAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
+        if (organizationAndProjectFilters.length === 0) {
+            return projects;
+        }
+        const validProjects = [];
+        const projectFilters = organizationAndProjectFilters.map(entry => entry.split('/').pop()!);
+        const regexSafeProjectFilters = projectFilters.map(projectFilter => escapeStringRegexp(projectFilter).replace(/\\\*/g, '.*?'));
+        for (const project of projects) {
+            if (regexSafeProjectFilters.some(filter => new RegExp(filter).test(project.label))) {
+                validProjects.push(project);
+            }
+        }
+        return validProjects;
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving projects: ${error}`);
         console.error(error);
