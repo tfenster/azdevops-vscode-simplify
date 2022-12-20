@@ -18,14 +18,21 @@ export function showWorkItemTypes(): string[] {
 }
 
 export function useWorkitemIdInBranchName(): boolean {
-    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false);
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false) ||
+        vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.useWorkitemIdInBranchName', false);
+}
+export function createBranchBasedOn(): string{
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.createBranchBasedOn', "default branch of remote repo");
+}
+export function askForBaseBranch(): boolean{
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.askForBaseBranch', false);
 }
 
 export function hideWorkItemsWithState(): string[] {
     return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('hideWorkItemsWithState', []);
 }
 export function sortOrderOfWorkItemState(): string[] {
-   return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('sortOrderOfWorkItemState', []);
+    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('sortOrderOfWorkItemState', []);
 }
 
 export function maxNumberOfWorkItems(): Number {

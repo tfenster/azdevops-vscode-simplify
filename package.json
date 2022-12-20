@@ -165,15 +165,39 @@
             "default": 25,
             "description": "Maximum number of work items to show per query"
           },
-          "azdevops-vscode-simplify.useWorkitemIdInBranchName": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use the work item id in the branch name proposal when you create a new branch"
-          },
           "azdevops-vscode-simplify.showParentsOfWorkItems": {
             "type": "boolean",
             "default": false,
             "description": "Show parents of the work items as well. The parent will then be loaded, regardless of the work item type. That means that the setting showWorkItemTypes is not considered when loading the parents."
+          },
+          "azdevops-vscode-simplify.useWorkitemIdInBranchName": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the work item id in the branch name proposal when you create a new branch",
+            "markdownDeprecationMessage": "Use this setting instead: `azdevops-vscode-simplify.createBranch.createBranchBasedOn`"
+          },
+          "azdevops-vscode-simplify.createBranch.useWorkitemIdInBranchName": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the work item id in the branch name proposal when you create a new branch"
+          },
+          "azdevops-vscode-simplify.createBranch.createBranchBasedOn": {
+            "type": "string",
+            "default": "default branch of remote repo",
+            "description": "Define the base branch when creating a new branch",
+            "enum": [
+              "current",
+              "default branch of remote repo"
+            ],
+            "enumDescriptions": [
+              "Create the branch based on the currently checked out branch.",
+              "Create the branch based on the default branch of the remote repository, e.g. origin/dev"
+            ]
+          },
+          "azdevops-vscode-simplify.createBranch.askForBaseBranch": {
+            "type": "boolean",
+            "default": false,
+            "description": "If this is selected, the `createBranchBasedOn` setting is just a proposal and you can select another branch as base."
           }
         }
       }
