@@ -232,24 +232,25 @@
   ],
   "devDependencies": {
     "@microsoft/vscode-azext-utils": "^0.3.15",
-    "@types/vscode": "^1.72.0",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^9.1.1",
     "@types/node": "16.x",
+    "@types/vscode": "^1.72.0",
     "@typescript-eslint/eslint-plugin": "^5.31.0",
     "@typescript-eslint/parser": "^5.31.0",
+    "@vscode/test-electron": "^2.1.5",
     "eslint": "^8.20.0",
     "glob": "^8.0.3",
     "mocha": "^10.0.0",
-    "typescript": "^4.7.4",
     "ts-loader": "^9.3.1",
+    "typescript": "^4.7.4",
     "webpack": "^5.74.0",
-    "webpack-cli": "^4.10.0",
-    "@vscode/test-electron": "^2.1.5"
+    "webpack-cli": "^4.10.0"
   },
   "dependencies": {
     "@azure/core-auth": "^1.4.0",
     "@azure/ms-rest-azure-env": "^2.0.0",
-    "axios": "1.1.0"
+    "axios": "1.1.0",
+    "escape-string-regexp": "^5.0.0"
   }
 }
