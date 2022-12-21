@@ -81,15 +81,14 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         });
         projects.sort((a, b) => a.label.localeCompare(b.label));
 
-        const organizationAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
-        if (organizationAndProjectFilters.length === 0) {
+        const orgAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
+        if (orgAndProjectFilters.length === 0) {
             return projects;
         }
         const validProjects = [];
-        const projectFilters = organizationAndProjectFilters.map(entry => entry.split('/').pop()!);
-        const regexSafeProjectFilters = projectFilters.map(projectFilter => escapeStringRegexp(projectFilter).replace(/\\\*/g, '.*?'));
+        const regexSafeOrgAndProjectFilters = orgAndProjectFilters.map(orgAndProjectFilter => escapeStringRegexp(orgAndProjectFilter).replace(/\\\*/g, '.*?'));
         for (const project of projects) {
-            if (regexSafeProjectFilters.some(filter => new RegExp(filter).test(project.label))) {
+            if (regexSafeOrgAndProjectFilters.some(filter => new RegExp(filter).test(`${organization.label}/${project.label}`))) {
                 validProjects.push(project);
             }
         }
