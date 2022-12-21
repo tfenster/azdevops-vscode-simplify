@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
 import { askForBaseBranch, createBranchBasedOn, getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
-import { Ref, RefType } from '../types/git';
+import { RefType } from '../types/git';
 import { Repository } from '../types/git';
+import escapeStringRegexp from 'escape-string-regexp';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
 const workItemTypesOfProjects: Map<string, IWorkItemType[]> = new Map();
+const preloadedOrganizationWithProjects: Map<OrganizationTreeItem, ProjectTreeItem[]> = new Map();
 
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
@@ -35,7 +37,27 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
             orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
         });
         orgs.sort((a, b) => a.label.localeCompare(b.label));
-        return orgs;
+
+        const organizationAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
+        if (organizationAndProjectFilters.length === 0) {
+            return orgs;
+        }
+        const validOrgs = [];
+        const organizationFilters = organizationAndProjectFilters.map(entry => entry.split('/').shift()!);
+        const regexSafeOrganizationFilters = organizationFilters.map(orgFilter => escapeStringRegexp(orgFilter).replace(/\\\*/g, '.*?'));
+        const starttime = Date.now();
+        for (const org of orgs) {
+            if (regexSafeOrganizationFilters.some(filter => new RegExp(filter).test(org.label))) {
+                const projectsOfOrg = await getProjects(org);
+                if (projectsOfOrg.length > 0) {
+                    preloadedOrganizationWithProjects.set(org, projectsOfOrg);
+                    validOrgs.push(org);
+                }
+            }
+        }
+        const endTime = Date.now();
+        console.log(`Took ${endTime.valueOf() - starttime.valueOf()} milliseconds to load organizations including the preload of their projects.`);
+        return validOrgs;
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving organizations: ${error}`);
         console.error(error);
@@ -44,6 +66,9 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
 }
 
 export async function getProjects(organization: OrganizationTreeItem): Promise<ProjectTreeItem[]> {
+    if (preloadedOrganizationWithProjects.has(organization)) {
+        return preloadedOrganizationWithProjects.get(organization)!;
+    }
     const repo = await getGitExtension().getRepo(false);
     let repoAnalysis: RepoAnalysis | undefined;
     if (repo) {
@@ -66,7 +91,19 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
                 collapsibleState));
         });
         projects.sort((a, b) => a.label.localeCompare(b.label));
-        return projects;
+
+        const orgAndProjectFilters: string[] = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('organizationAndProjectFilter', []);
+        if (orgAndProjectFilters.length === 0) {
+            return projects;
+        }
+        const validProjects = [];
+        const regexSafeOrgAndProjectFilters = orgAndProjectFilters.map(orgAndProjectFilter => escapeStringRegexp(orgAndProjectFilter).replace(/\\\*/g, '.*?'));
+        for (const project of projects) {
+            if (regexSafeOrgAndProjectFilters.some(filter => new RegExp(filter).test(`${organization.label}/${project.label}`))) {
+                validProjects.push(project);
+            }
+        }
+        return validProjects;
     } catch (error) {
         vscode.window.showErrorMessage(`An unexpected error occurred while retrieving projects: ${error}`);
         console.error(error);
