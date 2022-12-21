@@ -8,6 +8,7 @@ All notable changes to the "azdevops-vscode-simplify" extension will be document
 - Add the possibility to show the parents of the Work Items as well using the setting `azdevops-vscode-simplify.showParentsOfWorkItems`. #11
 - Add the possibility to select multiple Work Items when adding them to the commit message and using the command for that.
 - Add setting `azdevops-vscode-simplify.organizationAndProjectFilter` to filter organizations and projects. #10
+- Improve switching Azure accounts to try to fix #4
 
 ## [0.0.6]
 
