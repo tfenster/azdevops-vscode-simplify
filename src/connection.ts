@@ -1,28 +1,11 @@
 import { AccessToken } from "@azure/core-auth";
-import { AzureExtensionApiProvider } from "@microsoft/vscode-azext-utils/api";
 import axios, { AxiosRequestConfig } from "axios";
 import * as vscode from 'vscode';
-import { AzureAccountExtensionApi } from "./types/azure-account.api";
+import { getAzureAccountExtension } from "./helpers";
 
 export class AzDevOpsConnection {
     private static memberId: string | undefined;
     private static token: AccessToken | undefined;
-    private static azureAccountExtensionApi: AzureAccountExtensionApi;
-
-    constructor() {
-        if (AzDevOpsConnection.azureAccountExtensionApi === undefined) {
-            const azureAccountExtension = vscode.extensions.getExtension<AzureExtensionApiProvider>("ms-vscode.azure-account");
-            if (azureAccountExtension) {
-                AzDevOpsConnection.azureAccountExtensionApi = azureAccountExtension.exports.getApi('1.0.0');
-            } else {
-                vscode.window.showErrorMessage("Azure Account extension not found. This extension is required for the full functionality of Azure DevOps Simplify.");
-            }
-        }
-    }
-
-    public getAzureAccountExtensionApi(): AzureAccountExtensionApi {
-        return AzDevOpsConnection.azureAccountExtensionApi;
-    }
 
     public async getMemberId(): Promise<string | undefined> {
         try {
@@ -41,13 +24,14 @@ export class AzDevOpsConnection {
 
     private async getToken(): Promise<AccessToken | undefined> {
         if (AzDevOpsConnection.token === undefined || AzDevOpsConnection.token.expiresOnTimestamp <= Date.now()) {
-            if (AzDevOpsConnection.azureAccountExtensionApi === undefined || !AzDevOpsConnection.azureAccountExtensionApi.sessions.length
-                || !AzDevOpsConnection.azureAccountExtensionApi.sessions[0].credentials2) {
+            var azureAccountExtensionApi = getAzureAccountExtension().getAzureAccountExtensionApi();
+            if (azureAccountExtensionApi === undefined || !azureAccountExtensionApi.sessions.length
+                || !azureAccountExtensionApi.sessions[0].credentials2) {
                 vscode.window.showErrorMessage("The Azure login failed. Please try to run 'Azure: Sign Out' and 'Azure: Sign In' manually.");
                 return undefined;
             }
 
-            let newToken = await AzDevOpsConnection.azureAccountExtensionApi.sessions[0].credentials2.getToken('https://management.core.windows.net//.default');
+            let newToken = await azureAccountExtensionApi.sessions[0].credentials2.getToken('https://management.core.windows.net//.default');
             if (!newToken) {
                 vscode.window.showErrorMessage("The retrieval of a new authentication token for Azure failed. Please try to run 'Azure: Sign Out' and 'Azure: Sign In' manually.");
                 return undefined;

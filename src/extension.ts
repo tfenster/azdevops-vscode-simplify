@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { getAllWorkItemsAsQuickpicks, WorkItemQuickPickItems, WorkItemTreeItem } from './api/azdevops-api';
-import { getAzureDevOpsConnection, getGitExtension } from './helpers';
+import { getAzureAccountExtension, getGitExtension } from './helpers';
 import { AzDevOpsProvider } from './tree/azdevops-tree';
 
 let tenantStatusBarItem: vscode.StatusBarItem;
 
 export async function activate(context: vscode.ExtensionContext) {
 
-	const azureAccountExtensionApi = getAzureDevOpsConnection().getAzureAccountExtensionApi();
+	const azureAccountExtensionApi = getAzureAccountExtension().getAzureAccountExtensionApi();
 	if (!(await azureAccountExtensionApi.waitForLogin())) {
 		await vscode.commands.executeCommand('azure-account.askForLogin');
 	}
@@ -31,16 +31,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	tenantStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
 	tenantStatusBarItem.command = 'azure-account.selectTenant';
 	context.subscriptions.push(tenantStatusBarItem);
-	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onSessionsChanged(updateTenantStatusBarItem));
-	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onStatusChanged(updateTenantStatusBarItem));
-	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onSubscriptionsChanged(updateTenantStatusBarItem));
-	context.subscriptions.push(getAzureDevOpsConnection().getAzureAccountExtensionApi().onFiltersChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureAccountExtension().getAzureAccountExtensionApi().onSessionsChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureAccountExtension().getAzureAccountExtensionApi().onStatusChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureAccountExtension().getAzureAccountExtensionApi().onSubscriptionsChanged(updateTenantStatusBarItem));
+	context.subscriptions.push(getAzureAccountExtension().getAzureAccountExtensionApi().onFiltersChanged(updateTenantStatusBarItem));
 }
 
 export function deactivate() { }
 
 async function updateTenantStatusBarItem() {
-	let api = getAzureDevOpsConnection().getAzureAccountExtensionApi();
+	let api = getAzureAccountExtension().getAzureAccountExtensionApi();
 	let sessions = api.sessions;
 	const tenants: TenantIdDescription[] = await ((api as any).loginHelper.tenantsTask);
 	if (sessions && sessions.length > 0) {
