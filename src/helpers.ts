@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { AzureAccountExtension } from './api/azure-account-api';
 import { GitExtension } from './api/git-api';
 import { AzDevOpsConnection } from './connection';
 
 let azDevOpsConnection = new AzDevOpsConnection();
 let gitExtension = new GitExtension();
+let azureAccountExtension = new AzureAccountExtension();
 
 export function getAzureDevOpsConnection(): AzDevOpsConnection {
     return azDevOpsConnection;
@@ -11,6 +13,10 @@ export function getAzureDevOpsConnection(): AzDevOpsConnection {
 
 export function getGitExtension(): GitExtension {
     return gitExtension;
+}
+
+export function getAzureAccountExtension(): AzureAccountExtension {
+    return azureAccountExtension;
 }
 
 export function showWorkItemTypes(): string[] {
