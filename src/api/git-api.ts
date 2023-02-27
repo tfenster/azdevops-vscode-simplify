@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { API, InputBox, Repository } from '../types/git';
+import { analyzeGitRepo, RepoAnalysis } from './azdevops-api';
 
 export class GitExtension {
     private static gitApi: API;
@@ -19,7 +20,7 @@ export class GitExtension {
         return GitExtension.gitApi;
     }
 
-    public async appendToCheckinMessage(line: string): Promise<void> {
+    public async appendToCheckinMessage(line: string, repo?: Repository): Promise<void> {
         await this.withSourceControlInputBox((inputBox: InputBox) => {
             const previousMessage = inputBox.value;
             if (previousMessage) {
@@ -27,11 +28,13 @@ export class GitExtension {
             } else {
                 inputBox.value = line;
             }
-        });
+        }, repo);
     }
 
-    private async withSourceControlInputBox(fn: (input: InputBox) => void) {
-        const repo = await this.getRepo();
+    private async withSourceControlInputBox(fn: (input: InputBox) => void, repo?: Repository) {
+        if (!repo) {
+            repo = await this.getRepoOrShowWarning(RepoSelection.choose);
+        }
         if (repo) {
             const inputBox = repo.inputBox;
             if (inputBox) {
@@ -40,19 +43,50 @@ export class GitExtension {
         }
     }
 
-
-    public async getRepo(showWarningIfFailed: boolean = true): Promise<Repository | undefined> {
+    public async getRepoOrShowWarning(repoSelection: RepoSelection): Promise<Repository | undefined> {
+        return await this.getRepo(true, repoSelection);
+    }
+    public async getRepoSilent(): Promise<Repository | undefined> {
+        return await this.getRepo(false, RepoSelection.takeFirst);
+    }
+    private async getRepo(showWarningIfFailed: boolean, repoSelection: RepoSelection): Promise<Repository | undefined> {
         const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
         while (GitExtension.gitApi.state === 'uninitialized') { await sleep(100); }
         const repos = GitExtension.gitApi.repositories;
-        if (repos && repos.length > 0) {
-            return repos[0];
+        let reposWithRemote: Repository[] = [];
+        if (repos) {
+            reposWithRemote = repos.filter(repo => repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl);
+        }
+        if (reposWithRemote.length > 0) {
+            if (this.shouldChooseRepo(repoSelection, reposWithRemote)) {
+                return await this.chooseRepo(reposWithRemote);
+            } else {
+                return reposWithRemote[0];
+            }
         } else {
             if (showWarningIfFailed) {
-                vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository open.");
+                vscode.window.showErrorMessage("No Git repository found. This functionality only works when you have a Git repository with a remote open.");
             }
         }
         return undefined;
     }
 
+    private shouldChooseRepo(repoSelection: RepoSelection, reposWithRemote: Repository[]) {
+        return repoSelection === RepoSelection.choose && reposWithRemote.length > 1;
+    }
+    private async chooseRepo(reposWithRemote: Repository[]) {
+        interface QuickPickItemWithRepo { label: string, repo: Repository };
+        const repoQuickPicks: QuickPickItemWithRepo[] = reposWithRemote.map(repoWithRemote => {
+            return {
+                label: repoWithRemote.state.remotes[0].fetchUrl!,
+                repo: repoWithRemote
+            };
+        });
+        const repoPick: QuickPickItemWithRepo | undefined = await vscode.window.showQuickPick(repoQuickPicks, { title: 'Please select a repository' });
+        return repoPick ? repoPick.repo : undefined;
+    }
+}
+export enum RepoSelection {
+    takeFirst,
+    choose
 }

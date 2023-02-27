@@ -2,6 +2,10 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.8]
+
+- Choose a repo if you've multiple opened before executing an action. #37
+
 ## [0.0.7]
 
 - Ask for branch to base on when creating a new branch #28
