@@ -2,6 +2,10 @@
 
 All notable changes to the "azdevops-vscode-simplify" extension will be documented in this file.
 
+## [0.0.8]
+
+- Add new setting `azdevops-vscode-simplify.createBranch.branchNameProposal` which enables also adding the work item description and obsolete `useWorkitemIdInBranchName` setting for it. #36
+
 ## [0.0.7]
 
 - Ask for branch to base on when creating a new branch #28
