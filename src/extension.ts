@@ -92,7 +92,7 @@ async function selectWorkItem() {
 			});
 		} else {
 			quickPick.hide();
-			vscode.window.showWarningMessage('Uanble to load work items.');
+			vscode.window.showWarningMessage('Unable to load work items.');
 		}
 	} catch (error) {
 		vscode.window.showErrorMessage(`An unexpected error occurred while retrieving work items: ${error}`);
