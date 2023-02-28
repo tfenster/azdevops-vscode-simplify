@@ -4,6 +4,7 @@ import { askForBaseBranch, createBranchBasedOn, getAzureDevOpsConnection, getGit
 import { RefType } from '../types/git';
 import { Repository } from '../types/git';
 import escapeStringRegexp from 'escape-string-regexp';
+import { RepoSelection } from './git-api';
 
 interface IWorkItemType { name: string; devOpsIcon: string; referenceName?: string };
 interface IWorkItem { id: string; fields: { [key: string]: string | any; }; themeIcon: vscode.ThemeIcon; }
@@ -12,11 +13,8 @@ const preloadedOrganizationWithProjects: Map<OrganizationTreeItem, ProjectTreeIt
 
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
-        const repo = await getGitExtension().getRepo(false);
-        let repoAnalysis: RepoAnalysis | undefined;
-        if (repo) {
-            repoAnalysis = analyzeGitRepo(repo);
-        }
+        const repos = await getGitExtension().getRepos();
+        let repoAnalyses = repos.map(repo => analyzeGitRepo(repo));
 
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
@@ -31,7 +29,7 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
         let orgs = new Array<OrganizationTreeItem>();
         await responseAccounts.value.forEach((account: any) => {
             let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            if (account.accountName === repoAnalysis?.orgName) {
+            if (repoAnalyses.some(repoAnalysis => account.accountName === repoAnalysis?.orgName)) {
                 collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             }
             orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
@@ -69,11 +67,8 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
     if (preloadedOrganizationWithProjects.has(organization)) {
         return preloadedOrganizationWithProjects.get(organization)!;
     }
-    const repo = await getGitExtension().getRepo(false);
-    let repoAnalysis: RepoAnalysis | undefined;
-    if (repo) {
-        repoAnalysis = analyzeGitRepo(repo);
-    }
+    const repos = await getGitExtension().getRepos();
+    const repoAnalyses = repos.map(repo => analyzeGitRepo(repo));
     try {
         let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
@@ -84,7 +79,7 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         let projects = new Array<ProjectTreeItem>();
         await responseProjects.value.forEach((project: any) => {
             let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            if (project.name === repoAnalysis?.projectNameOrId) {
+            if (repoAnalyses.some(repoAnalysis => project.name === repoAnalysis?.projectNameOrId && organization.label === repoAnalysis?.orgName)) {
                 collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             }
             projects.push(new ProjectTreeItem(project.name, `${organization.url}/${project.id}`, project.id, organization,
@@ -111,52 +106,49 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
     }
 }
 export interface WorkItemQuickPickItems { label: string; kind?: vscode.QuickPickItemKind; description?: string; detail?: string; picked?: boolean; alwaysShow?: boolean; buttons?: readonly vscode.QuickInputButton[]; workItemId: number; parentId?: number; }
-export async function getAllWorkItemsAsQuickpicks(): Promise<WorkItemQuickPickItems[] | undefined> {
-    const repo = await getGitExtension().getRepo();
-    if (repo) {
-        const repoAnalysis = analyzeGitRepo(repo);
-        if (repoAnalysis) {
-            const query = await createQueryString("", repoAnalysis.projectUrl);
-            let workItems = await loadWorkItemObjects(query, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
+export async function getAllWorkItemsAsQuickpicks(repo: Repository): Promise<WorkItemQuickPickItems[] | undefined> {
+    const repoAnalysis = analyzeGitRepo(repo);
+    if (repoAnalysis) {
+        const query = await createQueryString("", repoAnalysis.projectUrl);
+        let workItems = await loadWorkItemObjects(query, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
 
-            const showParentsOfWorkItems = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showParentsOfWorkItems', false);
-            let parentChildRelationMap: { "parent": number, "child": number }[] = [];
-            if (showParentsOfWorkItems) {
-                parentChildRelationMap = await getParentChildRelationMap(repoAnalysis.projectUrl, workItems.map(wi => +wi.id));
-                const parentWorkItemIdsNotYetLoaded = parentChildRelationMap.filter(mapEntry => !workItems.some(loadedWorkItem => parseInt(loadedWorkItem.id) === mapEntry.parent)).map(entry => entry.parent);
-                if (parentWorkItemIdsNotYetLoaded.length > 0) {
-                    const queryToLoadMissingParents = await createQueryString(`[System.Id] in (${parentWorkItemIdsNotYetLoaded.join(',')})`, repoAnalysis.projectUrl, false);
-                    const parentWorkItems = await loadWorkItemObjects(queryToLoadMissingParents, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
-                    workItems = workItems.concat(parentWorkItems);
-                }
+        const showParentsOfWorkItems = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showParentsOfWorkItems', false);
+        let parentChildRelationMap: { "parent": number, "child": number }[] = [];
+        if (showParentsOfWorkItems) {
+            parentChildRelationMap = await getParentChildRelationMap(repoAnalysis.projectUrl, workItems.map(wi => +wi.id));
+            const parentWorkItemIdsNotYetLoaded = parentChildRelationMap.filter(mapEntry => !workItems.some(loadedWorkItem => parseInt(loadedWorkItem.id) === mapEntry.parent)).map(entry => entry.parent);
+            if (parentWorkItemIdsNotYetLoaded.length > 0) {
+                const queryToLoadMissingParents = await createQueryString(`[System.Id] in (${parentWorkItemIdsNotYetLoaded.join(',')})`, repoAnalysis.projectUrl, false);
+                const parentWorkItems = await loadWorkItemObjects(queryToLoadMissingParents, repoAnalysis.orgUrl, repoAnalysis.projectUrl, false);
+                workItems = workItems.concat(parentWorkItems);
             }
-
-            const wiDetails: WorkItemQuickPickItems[] = workItems.map((wi: IWorkItem) => {
-                const assignedTo = `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "Unassigned")}`;
-                let detail = assignedTo;
-                let buttons: vscode.QuickInputButton[] = [];
-                const parent = parentChildRelationMap.find(entry => entry.child === +wi.id)?.parent;
-                const childs = parentChildRelationMap.filter(entry => entry.parent === +wi.id).map(entry => entry.child);
-                if (parent) {
-                    detail += `; Child of ${parent}`;
-                    buttons.push({
-                        iconPath: new vscode.ThemeIcon("references"),
-                        tooltip: "Add parent"
-                    });
-                }
-                if (childs.length > 0) { detail += `; Parent of ${childs.join(',')}`; }
-
-                return {
-                    label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
-                    description: `${wi.id}`,
-                    detail: detail,
-                    buttons: buttons,
-                    workItemId: +wi.id,
-                    parentId: parent
-                };
-            });
-            return wiDetails;
         }
+
+        const wiDetails: WorkItemQuickPickItems[] = workItems.map((wi: IWorkItem) => {
+            const assignedTo = `Assigned to: ${(wi.fields["System.AssignedTo"] ? wi.fields["System.AssignedTo"].displayName : "Unassigned")}`;
+            let detail = assignedTo;
+            let buttons: vscode.QuickInputButton[] = [];
+            const parent = parentChildRelationMap.find(entry => entry.child === +wi.id)?.parent;
+            const childs = parentChildRelationMap.filter(entry => entry.parent === +wi.id).map(entry => entry.child);
+            if (parent) {
+                detail += `; Child of ${parent}`;
+                buttons.push({
+                    iconPath: new vscode.ThemeIcon("references"),
+                    tooltip: "Add parent"
+                });
+            }
+            if (childs.length > 0) { detail += `; Parent of ${childs.join(',')}`; }
+
+            return {
+                label: `$(${wi.themeIcon.id}) ${wi.fields["System.Title"]}`,
+                description: `${wi.id}`,
+                detail: detail,
+                buttons: buttons,
+                workItemId: +wi.id,
+                parentId: parent
+            };
+        });
+        return wiDetails;
     }
 
     async function getParentChildRelationMap(projectUrl: string, workItemIds: number[]) {
@@ -445,20 +437,22 @@ async function createQueryString(additionalFilter: string | undefined, projectUr
     return query;
 }
 
-function analyzeGitRepo(repo: Repository): RepoAnalysis | undefined {
+export function analyzeGitRepo(repo: Repository): RepoAnalysis | undefined {
     if (repo.state.remotes[0].fetchUrl) {
         let remoteRepoName = repo.state.remotes[0].fetchUrl;
         let pathSegments: string[] | undefined;
         let repoSegmentNo = 0;
-        if (remoteRepoName.startsWith("git@")) {  // e.g. git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
-            remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
-            pathSegments = remoteRepoName.split("/");
-            repoSegmentNo = 2;
-        }
-        else if (remoteRepoName.startsWith('https://')) {  // e.g. https://{org}@dev.azure.com/{org}/{project}/_git/{repo}
-            remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
-            pathSegments = remoteRepoName.split("/");
-            repoSegmentNo = 3;
+        if (remoteRepoName.includes("dev.azure.com")) {
+            if (remoteRepoName.startsWith("git@")) {  // e.g. git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
+                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/") + 1);
+                pathSegments = remoteRepoName.split("/");
+                repoSegmentNo = 2;
+            }
+            else if (remoteRepoName.startsWith('https://')) {  // e.g. https://{org}@dev.azure.com/{org}/{project}/_git/{repo}
+                remoteRepoName = remoteRepoName.substring(remoteRepoName.indexOf("/", 10) + 1);
+                pathSegments = remoteRepoName.split("/");
+                repoSegmentNo = 3;
+            }
         }
         if (pathSegments && pathSegments.length > 1) {
             const orgUrl = `https://dev.azure.com/${pathSegments[0]}`;
@@ -575,7 +569,7 @@ export class WorkItemTreeItem extends vscode.TreeItem {
     contextValue = 'workitem';
 
     public async createBranch() {
-        const repo = await getGitExtension().getRepo();
+        const repo = await getGitExtension().getRepoOrShowWarning(RepoSelection.choose);
         if (repo) {
             let repoAnalysis = analyzeGitRepo(repo);
             if (repoAnalysis) {
@@ -594,12 +588,9 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                     }
                 });
                 if (newBranch) {
-                    if (repo.state.HEAD?.upstream && repo.state.remotes.length > 0 && repo.state.remotes[0].fetchUrl) {
-                        // get substring after last slash
-                        let remoteRepoName = repo.state.remotes[0].fetchUrl;
-                        remoteRepoName = remoteRepoName.substring(remoteRepoName.lastIndexOf("/") + 1);
+                    if (repo.state.HEAD?.upstream) {
                         try {
-                            let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${remoteRepoName}?api-version=5.1-preview.1`);
+                            let remoteRepo = await getAzureDevOpsConnection().get(`${this.parent.parent.url}/_apis/git/repositories/${repoAnalysis.repoNameOrId}?api-version=5.1-preview.1`);
                             if (remoteRepo === undefined) {
                                 return;
                             }
@@ -632,6 +623,7 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                             vscode.window.showInformationMessage(`Created branch ${newBranch} and linked it to work item ${this.wiId}`);
                         } catch (error) {
                             vscode.window.showErrorMessage(`Failed to create branch ${newBranch} and/or link it to work item ${this.wiId}`);
+                            console.log(error);
                         }
                     } else {
                         vscode.window.showErrorMessage("No upstream branch found. This functionality only works with an upstream branch.");
