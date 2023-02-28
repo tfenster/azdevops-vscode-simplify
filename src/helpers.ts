@@ -23,14 +23,30 @@ export function showWorkItemTypes(): string[] {
     return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('showWorkItemTypes', []);
 }
 
-export function useWorkitemIdInBranchName(): boolean {
-    return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false) ||
-        vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.useWorkitemIdInBranchName', false);
+export function getBranchNameProposalSetting(): BranchNameProposal {
+    let branchNameProposal = BranchNameProposal.nothing;
+    const branchNameProposalAsString = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get<string>('createBranch.branchNameProposal');
+    if (branchNameProposalAsString) {
+        branchNameProposal = BranchNameProposal[branchNameProposalAsString as any] as unknown as BranchNameProposal;
+    } else {
+        const useId: boolean = vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('useWorkitemIdInBranchName', false) ||
+            vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.useWorkitemIdInBranchName', false);
+        if (useId) {
+            branchNameProposal = BranchNameProposal.workitemId;
+        }
+    }
+    return branchNameProposal;
 }
-export function createBranchBasedOn(): string{
+export enum BranchNameProposal {
+    "nothing",
+    "workitemId",
+    "workitemDescription",
+    "workitemIdAndDescription"
+}
+export function createBranchBasedOn(): string {
     return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.createBranchBasedOn', "default branch of remote repo");
 }
-export function askForBaseBranch(): boolean{
+export function askForBaseBranch(): boolean {
     return vscode.workspace.getConfiguration('azdevops-vscode-simplify').get('createBranch.askForBaseBranch', false);
 }
 

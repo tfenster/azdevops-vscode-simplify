@@ -191,7 +191,19 @@
           "azdevops-vscode-simplify.createBranch.useWorkitemIdInBranchName": {
             "type": "boolean",
             "default": false,
-            "description": "Use the work item id in the branch name proposal when you create a new branch"
+            "description": "Use the work item id in the branch name proposal when you create a new branch",
+            "markdownDeprecationMessage": "Use this setting instead: `azdevops-vscode-simplify.createBranch.branchNameProposal`"
+          },
+          "azdevops-vscode-simplify.createBranch.branchNameProposal": {
+            "type": "string",
+            "default": "nothing",
+            "enum": [
+              "nothing",
+              "workitemId",
+              "workitemDescription",
+              "workitemIdAndDescription"
+            ],
+            "description": "Use the work item id and/or description in the branch name proposal when you create a new branch"
           },
           "azdevops-vscode-simplify.createBranch.createBranchBasedOn": {
             "type": "string",

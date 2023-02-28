@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AzDevOpsConnection } from '../connection';
-import { askForBaseBranch, createBranchBasedOn, getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, useWorkitemIdInBranchName } from '../helpers';
+import { askForBaseBranch, createBranchBasedOn, getAzureDevOpsConnection, getGitExtension, hideWorkItemsWithState, maxNumberOfWorkItems, showWorkItemTypes, sortOrderOfWorkItemState, getBranchNameProposalSetting, BranchNameProposal } from '../helpers';
 import { RefType } from '../types/git';
 import { Repository } from '../types/git';
 import escapeStringRegexp from 'escape-string-regexp';
@@ -582,10 +582,9 @@ export class WorkItemTreeItem extends vscode.TreeItem {
                 const remoteRefs: string[] = await getRemoteRefs(this.parent.parent.url, repoAnalysis.repoNameOrId);
                 const localRefs: string[] = repo.state.refs.filter(ref => ref.name !== undefined && ref.type !== RefType.RemoteHead).map(ref => ref.name!);
                 const existingRefs = remoteRefs.concat(localRefs);
-                const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
                 let newBranch = await vscode.window.showInputBox({
                     prompt: "Please enter the name of the new branch",
-                    value: `${gitPrefix !== "" ? `${gitPrefix}` : ""}${useWorkitemIdInBranchName() ? this.wiId : ""}`,
+                    value: this.getBranchNameProposal(),
                     validateInput: (value: string) => {
                         const existingref = existingRefs.find(refName => refName.toLowerCase() === value.toLowerCase());
                         if (existingref) {
@@ -689,5 +688,27 @@ export class WorkItemTreeItem extends vscode.TreeItem {
             }
             return remoteRefs;
         }
+    }
+
+    private getBranchNameProposal() {
+        const gitPrefix = vscode.workspace.getConfiguration('git').get('branchPrefix', "");
+        let branchNameProposal = gitPrefix !== "" ? `${gitPrefix}` : "";
+        let safeDescription = this.label.trim().toLowerCase().replace(/ /g, "-");
+        safeDescription = safeDescription.replace(/[^\w-]/g, "");
+        switch (getBranchNameProposalSetting()) {
+            case BranchNameProposal.workitemId:
+                branchNameProposal += this.wiId;
+                break;
+            case BranchNameProposal.workitemDescription:
+                branchNameProposal += safeDescription;
+                break;
+            case BranchNameProposal.workitemIdAndDescription:
+                branchNameProposal += `${this.wiId}-${safeDescription}`;
+                break;
+            default:
+                break;
+        }
+        const maxBranchNameLength = 370;
+        return branchNameProposal.substring(0, maxBranchNameLength);
     }
 }
