@@ -13,11 +13,8 @@ const preloadedOrganizationWithProjects: Map<OrganizationTreeItem, ProjectTreeIt
 
 export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
     try {
-        const repo = await getGitExtension().getRepoSilent();
-        let repoAnalysis: RepoAnalysis | undefined;
-        if (repo) {
-            repoAnalysis = analyzeGitRepo(repo);
-        }
+        const repos = await getGitExtension().getRepos();
+        let repoAnalyses = repos.map(repo => analyzeGitRepo(repo));
 
         let connection = getAzureDevOpsConnection();
         let memberId = await connection.getMemberId();
@@ -32,7 +29,7 @@ export async function getOrganizations(): Promise<OrganizationTreeItem[]> {
         let orgs = new Array<OrganizationTreeItem>();
         await responseAccounts.value.forEach((account: any) => {
             let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            if (account.accountName === repoAnalysis?.orgName) {
+            if (repoAnalyses.some(repoAnalysis => account.accountName === repoAnalysis?.orgName)) {
                 collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             }
             orgs.push(new OrganizationTreeItem(account.accountName, `https://dev.azure.com/${account.accountName}`, account.accountId, collapsibleState));
@@ -70,11 +67,8 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
     if (preloadedOrganizationWithProjects.has(organization)) {
         return preloadedOrganizationWithProjects.get(organization)!;
     }
-    const repo = await getGitExtension().getRepoSilent();
-    let repoAnalysis: RepoAnalysis | undefined;
-    if (repo) {
-        repoAnalysis = analyzeGitRepo(repo);
-    }
+    const repos = await getGitExtension().getRepos();
+    const repoAnalyses = repos.map(repo => analyzeGitRepo(repo));
     try {
         let connection = getAzureDevOpsConnection();
         // https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1&tabs=HTTP
@@ -85,7 +79,7 @@ export async function getProjects(organization: OrganizationTreeItem): Promise<P
         let projects = new Array<ProjectTreeItem>();
         await responseProjects.value.forEach((project: any) => {
             let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            if (project.name === repoAnalysis?.projectNameOrId) {
+            if (repoAnalyses.some(repoAnalysis => project.name === repoAnalysis?.projectNameOrId && organization.label === repoAnalysis?.orgName)) {
                 collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             }
             projects.push(new ProjectTreeItem(project.name, `${organization.url}/${project.id}`, project.id, organization,
