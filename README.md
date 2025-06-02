@@ -1,5 +1,7 @@
 # azdevops-vscode-simplify README
 
+This has been archived as we didn't see a lot of usage or feedback.
+
 This is the README for the extension "azdevops-vscode-simplify" which aims at working with Azure DevOps from within VS Code more efficiently. 
 
 ## Features
